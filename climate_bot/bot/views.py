@@ -17,7 +17,7 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 
 import django
-from djano.conf import settings
+from django.conf import settings
 
 django.setup()
 
