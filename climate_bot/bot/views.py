@@ -16,10 +16,10 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 
-import django
-from django.conf import settings
+# import django
+# from django.conf import settings
 
-django.setup()
+# django.setup()
 
 def get_device_data():
     locations = defaultdict(list)
@@ -251,8 +251,8 @@ def handle_text(message):
 You can see all available commands by typing /Help❓
 ''')
 
-if __name__ == "__main__":
-    start_bot_thread()
+# if __name__ == "__main__":
+#     start_bot_thread()
 # def run_bot_view(request):
 #     start_bot_thread()
 #     return JsonResponse({'status': 'Bot is running in the background!'})
