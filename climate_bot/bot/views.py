@@ -1,4 +1,4 @@
-#import requests
+import requests
 #from django.http import JsonResponse
 #from django.views import View
 import telebot
@@ -143,7 +143,8 @@ def handle_device_selection(message):
             )
             
             bot.send_message(chat_id, formatted_data, reply_markup=command_markup)
-            bot.send_message(chat_id, '''For the next measurement, select /Current 📍 every quarter of the hour. 🕒​''')
+            bot.send_message(chat_id, '''For the next measurement, select\t
+/Current 📍 every quarter of the hour. 🕒​''')
         else:
             bot.send_message(chat_id, "⚠️ Error retrieving data. Please try again later.", reply_markup=command_markup)
     else:
@@ -187,7 +188,8 @@ def get_current_data(message):
                 f"⚠️ Some measurements may have issues."
             )
             bot.send_message(chat_id, formatted_data, reply_markup=command_markup)
-            bot.send_message(chat_id, '''For the next measurement, select /Current 📍 every quarter of the hour. 🕒​''')
+            bot.send_message(chat_id, '''For the next measurement, select\t
+/Current 📍 every quarter of the hour. 🕒​''')
         else:
             bot.send_message(chat_id, "⚠️ Error retrieving data. Please try again later.", reply_markup=command_markup)
     else:
@@ -228,14 +230,10 @@ def website(message):
 @bot.message_handler(commands=['Map'])
 def map(message):
     chat_id = message.chat.id
-    image_path = 'https://images-in-website.s3.us-east-1.amazonaws.com/Bot/map.jpg'
-    if os.path.exists(image_path):
-        with open(image_path, 'rb') as image:
-            bot.send_photo(chat_id, photo = image)
-            bot.send_message(chat_id, 
-            '''📌 The highlighted locations indicate the current active climate devices. 🗺️ ''')
-    else:
-        bot.send_message(chat_id, "⚠️ Error: Map image not found.")
+    image = 'https://images-in-website.s3.us-east-1.amazonaws.com/Bot/map.jpg'
+    bot.send_photo(chat_id, photo = image)
+    bot.send_message(chat_id, 
+'''📌 The highlighted locations indicate the current active climate devices. 🗺️ ''')
 
 @bot.message_handler(content_types=['audio', 'document', 'photo', 'sticker', 'video', 'video_note', 'voice', 'contact', 'location', 'venue', 'animation'])
 def handle_media(message):
