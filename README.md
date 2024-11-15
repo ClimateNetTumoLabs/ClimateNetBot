@@ -5,15 +5,12 @@
 ## Features
 
 - Get updates on climate conditions.
-- Receive alerts for significant climate changes and potential hazards.
-- Access personalized recommendations based on current conditions.
 - User-friendly interface to choose locations and devices.
 - Supports multiple devices and locations across Armenia and the USA.
 
 ## Technologies Used
 
 - **Django**: A powerful web framework for building the backend.
-- **Django REST Framework**: For building the RESTful API.
 - **Telegram Bot API**: To interact with users via Telegram.
 - **Python**: The programming language used for development.
 
