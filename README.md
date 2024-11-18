@@ -42,11 +42,11 @@ To set up the ClimateNet bot locally, follow these steps:
          #from django.views import View`
 
    Line 256:
-         `#def run_bot_view(request):'\n'
-            #start_bot_thread()'\n'
-            #return JsonResponse({'status': 'Bot is running in the background!'})'\n'`
+         `#def run_bot_view(request):
+            #start_bot_thread()
+            #return JsonResponse({'status': 'Bot is running in the background!'})`
 
-8. **Run the Django server:**
+9. **Run the Django server:**
     `python manage.py runserver`
 
 **And see the result in development server at http://127.0.0.1:8000/**
