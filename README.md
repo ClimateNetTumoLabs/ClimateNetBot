@@ -113,6 +113,6 @@ To set up the ClimateNet bot locally, follow these steps:
    If service is not active, see the issues with this command:
    `sudo journalctl -u telegram_bot.service -f`
 
-
+## Happy Codding! 🚀
 
 
