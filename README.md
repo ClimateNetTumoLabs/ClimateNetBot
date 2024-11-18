@@ -36,9 +36,11 @@ To set up the ClimateNet bot locally, follow these steps:
 
 7. **Modify the code (Uncomment specific parts):**
    In climate_bot/bot/views.py, uncomment the following:
+   
       Lines 2 and 3:
          `#from django.http import JsonResponse
          #from django.views import View`
+
    Line 256:
          `#def run_bot_view(request):
             #start_bot_thread()
