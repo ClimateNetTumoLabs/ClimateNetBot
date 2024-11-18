@@ -48,7 +48,35 @@ To set up the ClimateNet bot locally, follow these steps:
             #start_bot_thread()
             #return JsonResponse({'status': 'Bot is running in the background!'})`
 
-6. **Run the Django server:**
+   In climate_bot/climate_bot/settings.py, change the following:
+
+      Line 28:
+         **FROM THIS:** 
+            `DEBUG=False`
+         **TO THIS:**
+            `DEBUG=True`
+
+   And also change this part: 
+      Line 85:
+       **FROM THIS:**  
+         ```
+           DATABASES = {
+             'default': {
+             'ENGINE': 'django.db.backends.sqlite3',
+             'NAME': '/home/ubuntu/django-app/climatenet/db.sqlite3',
+         }
+      }
+         ```
+      **TO THIS:**
+      ```
+         DATABASES = {
+            'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+      }
+       ```
+7. **Run the Django server:**
     `python manage.py runserver`
 
 **And see the result in development server at http://127.0.0.1:8000/**
