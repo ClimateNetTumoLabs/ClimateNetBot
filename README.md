@@ -34,7 +34,7 @@ To set up the ClimateNet bot locally, follow these steps:
 
    TELEGRAM_BOT_TOKEN=your_telegram_bot_token and SECRET_KEY=secret_key_of_your_django_project 
 
-   ## (if you don't have it generate by this command `python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')`
+   If you don't have it generate by this command `python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'`
 
 5. **Modify the code (Uncomment specific parts):**
    In climate_bot/bot/views.py, uncomment the following:
