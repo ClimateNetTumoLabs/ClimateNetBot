@@ -75,7 +75,7 @@ To set up the ClimateNet bot locally, follow these steps:
             'NAME': BASE_DIR / 'db.sqlite3',
         }
       }
-       ```
+      ```
 7. **Run the Django server:**
     `python manage.py runserver`
 
