@@ -52,17 +52,18 @@ To set up the ClimateNet bot locally, follow these steps:
 
       Line 28:
 
-   **FROM THIS:** 
-      ```DEBUG=False```
+      **FROM THIS:** 
+         ```DEBUG=False```
    
-   **TO THIS:**
-            ```DEBUG=True```
+      **TO THIS:**
+         ```DEBUG=True```
 
    And also change this part: 
 
-      Line 85:
-
+   Line 85:
+                  
       **FROM THIS:**  
+      
       ```
             DATABASES = {
                'default': {
