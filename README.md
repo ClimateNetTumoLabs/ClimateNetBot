@@ -51,16 +51,18 @@ To set up the ClimateNet bot locally, follow these steps:
    In climate_bot/climate_bot/settings.py, change the following:
 
       Line 28:
-         **FROM THIS:** 
-            ```DEBUG=False```
-         **TO THIS:**
+
+   **FROM THIS:** 
+      ```DEBUG=False```
+   
+   **TO THIS:**
             ```DEBUG=True```
 
    And also change this part: 
 
       Line 85:
 
-       **FROM THIS:**  
+      **FROM THIS:**  
       ```
             DATABASES = {
                'default': {
