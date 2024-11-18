@@ -10,7 +10,7 @@
 
 ## Technologies Used
 
-- **Django**: A powerful web framework for building the backend.
+- **Django**:  Serves as the framework to manage bot tasks, organize project structure.
 - **Telegram Bot API**: To interact with users via Telegram.
 - **Python**: The programming language used for development.
 
