@@ -97,7 +97,7 @@ To set up the ClimateNet bot locally, follow these steps:
       ```
       Save and exit the file.
 
-   6.**Start and enable the service:**
+   6. **Start and enable the service:**
    Reload systemd to recognize the new service:
       ```
       sudo systemctl daemon-reload
@@ -105,7 +105,7 @@ To set up the ClimateNet bot locally, follow these steps:
       sudo systemctl enable climatenet.service
       ```
 
-   7.**Verify the service:**
+   7. **Verify the service:**
    Check the status of your bot:
       `sudo systemctl status climatenet.service`
 
