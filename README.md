@@ -57,16 +57,18 @@ To set up the ClimateNet bot locally, follow these steps:
             `DEBUG=True`
 
    And also change this part: 
+
       Line 85:
        **FROM THIS:**  
-         ```
-           DATABASES = {
-             'default': {
-             'ENGINE': 'django.db.backends.sqlite3',
-             'NAME': '/home/ubuntu/django-app/climatenet/db.sqlite3',
-         }
+      ```
+            DATABASES = {
+               'default': {
+               'ENGINE': 'django.db.backends.sqlite3',
+               'NAME': '/home/ubuntu/django-app/climatenet/db.sqlite3',
+        }
       }
-         ```
+      ```
+
       **TO THIS:**
       ```
          DATABASES = {
