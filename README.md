@@ -52,7 +52,7 @@ To set up the ClimateNet bot locally, follow these steps:
 **And see the result in development server at http://127.0.0.1:8000/**
 
 
-##Server Hosting
+## Server Hosting
 
 **To host the bot on a Linux server using a service file, follow these steps:**
    1. **Clone the repository on your instance:**
