@@ -1,6 +1,6 @@
 # ClimateNet Telegram Bot
 
-🌤️ **ClimateNet** is your personal climate assistant on Telegram, designed to keep you informed about real-time climate and environmental conditions. With this bot, you can receive live updates on temperature, humidity, wind speed, and much more!
+🌤️ **ClimateNet** is your personal climate assistant on Telegram, designed to keep you informed about climate conditions. With this bot, you can see current updates on temperature, humidity, wind speed, and much more!
 
 ## Features
 
