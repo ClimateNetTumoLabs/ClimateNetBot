@@ -70,8 +70,10 @@ To set up the ClimateNet bot locally, follow these steps:
 
    4. **Set up environment variables:**
       Create a .env file in the root directory and add Telegram bot token and Secret Key:
+
       TELEGRAM_BOT_TOKEN=your_telegram_bot_token and SECRET_KEY=secret_key_of_your_django_project 
-      ##(if you don't have it generate by this command `python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())')`
+
+      If you don't have it generate by this command `python3 -c 'from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())'`
 
    5. **Create a systemd service file:**
       Create a systemd service file for the bot:
