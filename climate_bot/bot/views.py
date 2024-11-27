@@ -42,7 +42,7 @@ def fetch_latest_measurement(device_id):
         data = response.json()
         if data:
             latest_measurement = data[0]  
-            timestamp = latest_measurement["time"].replace("T", " ")
+            timestamp = latest_measurement["time"].replace("T", "  ")
             return {
                 "timestamp": timestamp,
                 "uv": latest_measurement.get("uv"),
@@ -127,7 +127,7 @@ def handle_device_selection(message):
         measurement = fetch_latest_measurement(device_id)
         if measurement:
             formatted_data = (
-                f"Latest Measurements in {selected_device} ({measurement['timestamp']}):\n"
+                f"Latest Measurements in <b>{selected_device}</b> {measurement['timestamp']} (last update)\n\n"
                 f"☀️ UV Index: {measurement['uv']}\n"
                 f"🔆​ Light Intensity: {measurement['lux']} lux\n"
                 f"🌡️ Temperature: {measurement['temperature']}°C\n"
@@ -139,10 +139,9 @@ def handle_device_selection(message):
                 f"🌪️ Wind Speed: {measurement['wind_speed']} m/s\n"
                 f"🌧️ Rainfall: {measurement['rain']} mm\n"
                 f"🧭​ Wind Direction: {measurement['wind_direction']}\n\n"
-                f"⚠️ Some measurements may have issues."
             )
             
-            bot.send_message(chat_id, formatted_data, reply_markup=command_markup)
+            bot.send_message(chat_id, formatted_data, reply_markup=command_markup, parse_mode='HTML')
             bot.send_message(chat_id, '''For the next measurement, select\t
 /Current 📍 every quarter of the hour. 🕒​''')
         else:
@@ -173,7 +172,7 @@ def get_current_data(message):
         measurement = fetch_latest_measurement(device_id)
         if measurement:
             formatted_data = (
-                f"Latest Measurement in {selected_device} ({measurement['timestamp']}):\n"
+                f"Latest Measurement in <b>{selected_device}</b> {measurement['timestamp']} (last update)\n\n"
                 f"☀️ UV Index: {measurement['uv']}\n"
                 f"🔆​ Light Intensity: {measurement['lux']} lux\n"
                 f"🌡️ Temperature: {measurement['temperature']}°C\n"
@@ -185,9 +184,8 @@ def get_current_data(message):
                 f"🌪️ Wind Speed: {measurement['wind_speed']} m/s\n"
                 f"🌧️ Rainfall: {measurement['rain']} mm\n"
                 f"🧭​ Wind Direction: {measurement['wind_direction']}\n\n"
-                f"⚠️ Some measurements may have issues."
             )
-            bot.send_message(chat_id, formatted_data, reply_markup=command_markup)
+            bot.send_message(chat_id, formatted_data, reply_markup=command_markup, parse_mode='HTML')
             bot.send_message(chat_id, '''For the next measurement, select\t
 /Current 📍 every quarter of the hour. 🕒​''')
         else:
@@ -230,7 +228,7 @@ def website(message):
 @bot.message_handler(commands=['Map'])
 def map(message):
     chat_id = message.chat.id
-    image = 'https://images-in-website.s3.us-east-1.amazonaws.com/Bot/map.jpg'
+    image = 'https://images-in-website.s3.us-east-1.amazonaws.com/Bot/map.png'
     bot.send_photo(chat_id, photo = image)
     bot.send_message(chat_id, 
 '''📌 The highlighted locations indicate the current active climate devices. 🗺️ ''')
