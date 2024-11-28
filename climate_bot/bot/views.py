@@ -1,6 +1,7 @@
 import requests
 #from django.http import JsonResponse
 #from django.views import View
+import json
 import telebot
 from telebot import types
 import threading
@@ -9,30 +10,55 @@ import os
 from dotenv import load_dotenv
 from bot.models import Device
 from collections import defaultdict
+import unicodedata
 
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
+TRANSLATIONS_PATH = TRANSLATIONS_PATH = '../climate_bot/translations/translations.json'
 
-import django
-from django.conf import settings
+def normalize_text(text):
+    return unicodedata.normalize('NFC', text)
 
-django.setup()
+def load_translations():
+    with open(TRANSLATIONS_PATH, 'r', encoding='utf-8') as file:
+        return json.load(file)
 
-def get_device_data():
+translations = load_translations()
+user_context = {}
+
+# Define a function to get translation based on user-selected language
+def get_translation(chat_id, key):
+    user_language = user_context.get(chat_id, {}).get('language', 'en')  # Default to English
+    return translations.get(user_language, {}).get(key, key)  # Return the translation or key if not found
+
+def get_device_data(language='en'):  # Add a language parameter (default to 'en' for English)
     locations = defaultdict(list)
     device_ids = {}
+
+    # Query the Device table from the database
     devices = Device.objects.all()
+
     for device in devices:
-        device_ids[device.name] = device.generated_id
-        locations[device.parent_name].append(device.name)
+        # Check the language and select the correct columns
+        if language == 'hy':
+            device_name = device.name_hy  # Armenian name
+            parent_name = device.parent_name_hy  # Armenian parent name
+        else:
+            device_name = device.name_en  # English name
+            parent_name = device.parent_name_en  # English parent name
+
+        # Add the device name and parent name to the respective locations and device_ids
+        device_ids[device_name] = device.generated_id
+        locations[parent_name].append(device_name)
 
     return locations, device_ids
 
+
 locations, device_ids = get_device_data()
-user_context = {}
+#user_context = {}
 
 def fetch_latest_measurement(device_id):
     url = f"https://climatenet.am/device_inner/{device_id}/latest/"
@@ -87,20 +113,57 @@ def send_location_selection(chat_id):
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    bot.send_message(
-        message.chat.id,
-        '🌤️ Welcome to ClimateNet! 🌧️'
+    chat_id = message.chat.id
+    language_markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    
+    # Add buttons for language selection with emojis
+    language_markup.add(
+        types.KeyboardButton("English 🇺🇸"),
+        types.KeyboardButton("Հայերեն 🇦🇲")
     )
+    
     bot.send_message(
-        message.chat.id,
-        f'''Hello {message.from_user.first_name}! 👋​ I am your personal climate assistant. 
-        
-With me, you can: 
-    🔹​​​ Access current measurements of temperature, humidity, wind speed, and more, which are refreshed every 15 minutes for reliable updates.
-'''
+        chat_id,
+        "Choose your preferred language 🇺🇸 / Ընտրել նախընտրելի լեզուն 🇦🇲",
+        reply_markup=language_markup
     )
-    send_location_selection(message.chat.id)
+    
+    # Initialize user context (we will set language later)
+    user_context[chat_id] = {}
 
+# Handle language selection with emojis
+@bot.message_handler(func=lambda message: normalize_text(message.text) in 
+                     [normalize_text("English 🇺🇸"), normalize_text("Հայերեն 🇦🇲")])
+def handle_language_selection(message):
+    chat_id = message.chat.id
+    # Determine language based on button text
+    language = 'en' if normalize_text(message.text) == normalize_text("English 🇺🇸") else 'hy'
+    
+    # Store user language preference
+    user_context[chat_id]['language'] = language
+    
+    # Send the start message in the selected language
+    bot.send_message(
+        chat_id,
+        get_translation(chat_id, 'start_welcome')  # Fetch the translation from JSON or similar
+    )
+    bot.send_message(
+        chat_id,
+        get_translation(chat_id, 'start_intro').format(first_name=message.from_user.first_name)
+    )
+    
+    send_location_selection(chat_id)
+    
+# Function to send location selection
+def send_location_selection(chat_id):
+    location_markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    # Assuming locations is already defined as in your provided code
+    for country in locations.keys():
+        location_markup.add(types.KeyboardButton(country))
+    
+    bot.send_message(chat_id, get_translation(chat_id, 'choose_location'), reply_markup=location_markup)
+
+# Location selection handler
 @bot.message_handler(func=lambda message: message.text in locations.keys())
 def handle_country_selection(message):
     selected_country = message.text
@@ -110,7 +173,7 @@ def handle_country_selection(message):
     for device in locations[selected_country]:
         markup.add(types.KeyboardButton(device))
 
-    bot.send_message(chat_id, 'Please choose a device: ✅​', reply_markup=markup)
+    bot.send_message(chat_id, get_translation(chat_id, 'choose_device'), reply_markup=markup)
 
 @bot.message_handler(func=lambda message: message.text in [device for devices in locations.values() for device in devices])
 def handle_device_selection(message):
@@ -126,28 +189,28 @@ def handle_device_selection(message):
         command_markup = get_command_menu()
         measurement = fetch_latest_measurement(device_id)
         if measurement:
+            # Translate the labels and format the data dynamically
             formatted_data = (
-                f"Latest Measurements in <b>{selected_device}</b> {measurement['timestamp']} (last update)\n\n"
-                f"☀️ UV Index: {measurement['uv']}\n"
-                f"🔆​ Light Intensity: {measurement['lux']} lux\n"
-                f"🌡️ Temperature: {measurement['temperature']}°C\n"
-                f"⏲️ Pressure: {measurement['pressure']} hPa\n"
-                f"💧 Humidity: {measurement['humidity']}%\n"
-                f"🫁​​ PM1: {measurement['pm1']} µg/m³\n"
-                f"💨​ PM2.5: {measurement['pm2_5']} µg/m³\n"
-                f"🌫️​ PM10: {measurement['pm10']} µg/m³\n"
-                f"🌪️ Wind Speed: {measurement['wind_speed']} m/s\n"
-                f"🌧️ Rainfall: {measurement['rain']} mm\n"
-                f"🧭​ Wind Direction: {measurement['wind_direction']}\n\n"
+                f"<b>{get_translation(chat_id, 'latest_measurements')}</b> <b>{selected_device}</b> {measurement['timestamp']} ({get_translation(chat_id, 'last_update')})\n\n"
+                f"☀️ {get_translation(chat_id, 'uv_index')}: {measurement['uv']}\n"
+                f"🔆​ {get_translation(chat_id, 'light_intensity')}: {measurement['lux']} {get_translation(chat_id, 'lux')}\n"
+                f"🌡️ {get_translation(chat_id, 'temperature')}: {measurement['temperature']}°C\n"
+                f"⏲️ {get_translation(chat_id, 'pressure')}: {measurement['pressure']} hPa\n"
+                f"💧 {get_translation(chat_id, 'humidity')}: {measurement['humidity']}%\n"
+                f"🫁​​ {get_translation(chat_id, 'pm1')}: {measurement['pm1']} µg/m³\n"
+                f"💨​ {get_translation(chat_id, 'pm2_5')}: {measurement['pm2_5']} µg/m³\n"
+                f"🌫️​ {get_translation(chat_id, 'pm10')}: {measurement['pm10']} µg/m³\n"
+                f"🌪️ {get_translation(chat_id, 'wind_speed')}: {measurement['wind_speed']} m/s\n"
+                f"🌧️ {get_translation(chat_id, 'rainfall')}: {measurement['rain']} mm\n"
+                f"🧭​ {get_translation(chat_id, 'wind_direction')}: {measurement['wind_direction']}\n\n"
             )
             
             bot.send_message(chat_id, formatted_data, reply_markup=command_markup, parse_mode='HTML')
-            bot.send_message(chat_id, '''For the next measurement, select\t
-/Current 📍 every quarter of the hour. 🕒​''')
+            bot.send_message(chat_id, get_translation(chat_id, 'next_measurement_info'))
         else:
-            bot.send_message(chat_id, "⚠️ Error retrieving data. Please try again later.", reply_markup=command_markup)
+            bot.send_message(chat_id, get_translation(chat_id, 'error_data'), reply_markup=command_markup)
     else:
-        bot.send_message(chat_id, 'Device not found. ❌​')
+        bot.send_message(chat_id, get_translation(chat_id, 'device_not_found'))
 
 
 def get_command_menu():
