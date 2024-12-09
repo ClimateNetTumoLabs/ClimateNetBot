@@ -127,7 +127,7 @@ def handle_device_selection(message):
         measurement = fetch_latest_measurement(device_id)
         if measurement:
             formatted_data = (
-                f"Latest Measurements in <b>{selected_device}</b> {measurement['timestamp']} (last update)\n\n"
+                f"Latest Measurements in <b>{selected_device}</b> {measurement['timestamp']}\n\n"
                 f"☀️ UV Index: {measurement['uv']}\n"
                 f"🔆​ Light Intensity: {measurement['lux']} lux\n"
                 f"🌡️ Temperature: {measurement['temperature']}°C\n"
@@ -172,7 +172,7 @@ def get_current_data(message):
         measurement = fetch_latest_measurement(device_id)
         if measurement:
             formatted_data = (
-                f"Latest Measurement in <b>{selected_device}</b> {measurement['timestamp']} (last update)\n\n"
+                f"Latest Measurement in <b>{selected_device}</b> {measurement['timestamp']}\n\n"
                 f"☀️ UV Index: {measurement['uv']}\n"
                 f"🔆​ Light Intensity: {measurement['lux']} lux\n"
                 f"🌡️ Temperature: {measurement['temperature']}°C\n"
