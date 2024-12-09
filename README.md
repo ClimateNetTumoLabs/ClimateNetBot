@@ -16,7 +16,7 @@
 
 ## Installation
 
-To set up the ClimateNet bot locally, follow these steps:
+To set up the ClimateNet bot locally follow these steps:
 
 1. **Clone the repository:**
    `git clone https://github.com/yourusername/climatenet-telegram-bot.git`
