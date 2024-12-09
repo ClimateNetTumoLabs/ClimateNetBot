@@ -24,7 +24,7 @@ jobs:
         EC2_HOST: ${{ secrets.EC2_IP}}
       run: |
         ssh -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
-          cd /ClimateNetBot/climate_bot # Navigate to your bot directory on EC2
+          cd home/ubuntu/ClimateNetBot/climate_bot/
           
           # Pull the latest changes
           git pull origin staging
