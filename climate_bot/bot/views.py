@@ -1,6 +1,6 @@
 import requests
-#from django.http import JsonResponse
-#from django.views import View
+from django.http import JsonResponse
+from django.views import View
 import telebot
 from telebot import types
 import threading
@@ -226,14 +226,25 @@ def website(message):
         reply_markup=markup
     )
 
+# @bot.message_handler(commands=['Map'])
+# def map(message):
+#     chat_id = message.chat.id
+#     image = 'https://images-in-website.s3.us-east-1.amazonaws.com/Bot/map.jpg'
+#     bot.send_photo(chat_id, photo = image)
+#     bot.send_message(chat_id, 
+# '''📌 The highlighted locations indicate the current active climate devices. 🗺️ ''')
 
 @bot.message_handler(commands=['Map'])
 def map(message):
-    chat_id = message.chat.id
-    image = 'https://images-in-website.s3.us-east-1.amazonaws.com/Bot/map.jpg'
-    bot.send_photo(chat_id, photo = image)
-    bot.send_message(chat_id, 
-'''📌 The highlighted locations indicate the current active climate devices. 🗺️ ''')
+    markup = types.InlineKeyboardMarkup()
+    button = types.InlineKeyboardButton('See the map', url='https://climatenet.am/en/#Map')
+    markup.add(button)
+
+    bot.send_message(
+        message.chat.id,
+        '📌 To see the highlighted locations indicate the current active climate devices click the button. 🗺️ ',
+        reply_markup=markup
+    )
 
 @bot.message_handler(content_types=['audio', 'document', 'photo', 'sticker', 'video', 'video_note', 'voice', 'contact', 'location', 'venue', 'animation'])
 def handle_media(message):
@@ -253,6 +264,6 @@ You can see all available commands by typing /Help❓
 
 # if __name__ == "__main__":
 #     start_bot_thread()
-# def run_bot_view(request):
-#     start_bot_thread()
-#     return JsonResponse({'status': 'Bot is running in the background!'})
+def run_bot_view(request):
+     start_bot_thread()
+     return JsonResponse({'status': 'Bot is running in the background!'})
