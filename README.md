@@ -111,7 +111,7 @@ To set up the ClimateNet bot locally, follow these steps:
 
    5. **Create a systemd service file:**
       Create a systemd service file for the bot:
-      `sudo vim /etc/systemd/system/climatenet.service`
+      `sudo vim /etc/systemd/system/telegram_bot.service`
       
       Add the following content (adjust paths as needed):
       ```
@@ -137,13 +137,13 @@ To set up the ClimateNet bot locally, follow these steps:
    Reload systemd to recognize the new service:
       ```
       sudo systemctl daemon-reload
-      sudo systemctl start climatenet.service
-      sudo systemctl enable climatenet.service
+      sudo systemctl start telegram_bot.service
+      sudo systemctl enable telegram_bot.service
       ```
 
    7. **Verify the service:**
    Check the status of your bot:
-      `sudo systemctl status climatenet.service`
+      `sudo systemctl status telegram_bot.service`
 
 
    **Your bot should now be running and accessible via Telegram!**
