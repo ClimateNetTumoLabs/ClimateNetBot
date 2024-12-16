@@ -112,6 +112,42 @@ def handle_country_selection(message):
 
     bot.send_message(chat_id, 'Please choose a device: ✅​', reply_markup=markup)
 
+def uv_index(uv):
+    if uv is None:
+        return " "
+    if uv < 3:
+        return "Low 🟢"
+    elif 3 <= uv <= 5:
+        return "Moderate ​🟡​​"
+    elif 6 <= uv <= 7:
+        return "High ​🟠​​"
+    elif 8 <= uv <= 10:
+        return "Very High 🔴​"
+    else:
+        return "Extreme 🟣"
+
+def pm_level(pm, pollutant):
+    if pm is None:
+        return " "
+    thresholds = {
+        "PM1.0": [50, 100, 150, 200, 300],
+        "PM2.5": [12, 36, 56, 151, 251],
+        "PM10": [54, 154, 254, 354, 504]
+    }
+    levels = [
+        "Good 🟢​​",
+        "Moderate ​🟡​​",
+        "Unhealthy for Sensitive Groups ​🟠​​",
+        "Unhealthy 🟠​​",
+        "Very Unhealthy 🔴​",
+        "Hazardous 🔴​"
+    ]
+    thresholds = thresholds.get(pollutant, [])
+    for i, limit in enumerate(thresholds):
+        if pm <= limit:
+            return levels[i]
+    return levels[-1]
+
 @bot.message_handler(func=lambda message: message.text in [device for devices in locations.values() for device in devices])
 def handle_device_selection(message):
     selected_device = message.text
@@ -126,16 +162,21 @@ def handle_device_selection(message):
         command_markup = get_command_menu()
         measurement = fetch_latest_measurement(device_id)
         if measurement:
+            uv_description = uv_index(measurement['uv'])
+            pm1_description = pm_level(measurement['pm1'], "PM1.0")
+            pm2_5_description = pm_level(measurement['pm2_5'], "PM2.5")
+            pm10_description = pm_level(measurement['pm10'], "PM10")
+
             formatted_data = (
                 f"Latest Measurements in <b>{selected_device}</b> {measurement['timestamp']}\n\n"
-                f"☀️ UV Index: {measurement['uv']}\n"
+                f"☀️ UV Index: {measurement['uv']} ({uv_description})\n"
                 f"🔆​ Light Intensity: {measurement['lux']} lux\n"
                 f"🌡️ Temperature: {measurement['temperature']}°C\n"
                 f"⏲️ Pressure: {measurement['pressure']} hPa\n"
                 f"💧 Humidity: {measurement['humidity']}%\n"
-                f"🫁​​ PM1: {measurement['pm1']} µg/m³\n"
-                f"💨​ PM2.5: {measurement['pm2_5']} µg/m³\n"
-                f"🌫️​ PM10: {measurement['pm10']} µg/m³\n"
+                f"🫁 PM1: {measurement['pm1']} µg/m³ ({pm1_description})\n"
+                f"💨 PM2.5: {measurement['pm2_5']} µg/m³ ({pm2_5_description})\n"
+                f"🌫️ PM10: {measurement['pm10']} µg/m³ ({pm10_description})\n"
                 f"🌪️ Wind Speed: {measurement['wind_speed']} m/s\n"
                 f"🌧️ Rainfall: {measurement['rain']} mm\n"
                 f"🧭​ Wind Direction: {measurement['wind_direction']}\n\n"
@@ -171,16 +212,21 @@ def get_current_data(message):
         selected_device = user_context[chat_id].get('selected_device')
         measurement = fetch_latest_measurement(device_id)
         if measurement:
+            uv_description = uv_index(measurement['uv'])
+            pm1_description = pm_level(measurement['pm1'], "PM1.0")
+            pm2_5_description = pm_level(measurement['pm2_5'], "PM2.5")
+            pm10_description = pm_level(measurement['pm10'], "PM10")
+
             formatted_data = (
                 f"Latest Measurement in <b>{selected_device}</b> {measurement['timestamp']}\n\n"
-                f"☀️ UV Index: {measurement['uv']}\n"
+                f"☀️ UV Index: {measurement['uv']} ({uv_description})\n"
                 f"🔆​ Light Intensity: {measurement['lux']} lux\n"
                 f"🌡️ Temperature: {measurement['temperature']}°C\n"
                 f"⏲️ Pressure: {measurement['pressure']} hPa\n"
                 f"💧 Humidity: {measurement['humidity']}%\n"
-                f"🫁​ PM1: {measurement['pm1']} µg/m³\n"
-                f"💨​​ PM2.5: {measurement['pm2_5']} µg/m³\n"
-                f"🌫️​ PM10: {measurement['pm10']} µg/m³\n"
+                f"🫁 PM1: {measurement['pm1']} µg/m³ ({pm1_description})\n"
+                f"💨 PM2.5: {measurement['pm2_5']} µg/m³ ({pm2_5_description})\n"
+                f"🌫️ PM10: {measurement['pm10']} µg/m³ ({pm10_description})\n"
                 f"🌪️ Wind Speed: {measurement['wind_speed']} m/s\n"
                 f"🌧️ Rainfall: {measurement['rain']} mm\n"
                 f"🧭​ Wind Direction: {measurement['wind_direction']}\n\n"
