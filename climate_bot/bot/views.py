@@ -112,6 +112,17 @@ def handle_country_selection(message):
 
     bot.send_message(chat_id, 'Please choose a device: ✅​', reply_markup=markup)
 
+thresholds = {
+    'UV Index': 6,
+    'Temperature': 35,
+    'PM1': 100,
+    'PM2.5': 36,
+    'PM10': 155,
+    'Wind Speed': 15,
+    'Rainfall': 10
+}
+
+
 def uv_index(uv):
     if uv is None:
         return " "
@@ -129,11 +140,13 @@ def uv_index(uv):
 def pm_level(pm, pollutant):
     if pm is None:
         return " "
+
     thresholds = {
         "PM1.0": [50, 100, 150, 200, 300],
         "PM2.5": [12, 36, 56, 151, 251],
         "PM10": [54, 154, 254, 354, 504]
     }
+
     levels = [
         "Good 🟢​​",
         "Moderate ​🟡​​",
@@ -146,6 +159,7 @@ def pm_level(pm, pollutant):
     for i, limit in enumerate(thresholds):
         if pm <= limit:
             return levels[i]
+    
     return levels[-1]
 
 @bot.message_handler(func=lambda message: message.text in [device for devices in locations.values() for device in devices])
@@ -199,6 +213,8 @@ def get_command_menu():
         types.KeyboardButton('/Help ❓'),
         types.KeyboardButton('/Website 🌐'),
         types.KeyboardButton('/Map 🗺️'),
+        types.KeyboardButton('/Check_safety 🛡️​'),
+        
     )
     return command_markup
 
@@ -246,7 +262,8 @@ def help(message):
 <b>/Change_device 🔄:</b> Change to another climate monitoring device.\n
 <b>/Help ❓:</b> Show available commands.\n
 <b>/Website 🌐:</b> Visit our website for more information.\n
-<b>/Map 🗺️​:</b> View the locations of all devices on a map.
+<b>/Map 🗺️​:</b> View the locations of all devices on a map.\n
+<b>/Check_safety 🛡️​:</b> View if the current climate measurements are above safe limits.\n
 ''', parse_mode='HTML')
 
 @bot.message_handler(commands=['Change_device'])
@@ -269,6 +286,51 @@ def website(message):
         'For more information, click the button below to visit our official website: 🖥️​',
         reply_markup=markup
     )
+
+@bot.message_handler(commands=['Check_safety'])
+def check_safety(message):
+    chat_id = message.chat.id
+
+    if chat_id not in user_context or 'device_id' not in user_context[chat_id]:
+        bot.send_message(chat_id, "⚠️ Please select a device first using /Change_device 🔄.")
+        return
+
+    device_id = user_context[chat_id]['device_id']
+    selected_device = user_context[chat_id].get('selected_device')
+    measurement = fetch_latest_measurement(device_id)
+
+    if not measurement:
+        bot.send_message(chat_id, "⚠️ Failed to retrieve data for the selected device.")
+        return
+    alerts_triggered = []
+    for measurement_type, threshold in thresholds.items():
+        if measurement_type == "PM2.5":
+            key = "pm2_5"
+        else:
+            key = measurement_type.lower().replace(' ', '_')
+        value = measurement.get(key)
+
+        if value is not None and value > threshold:
+            if measurement_type == "UV Index":
+                alerts_triggered.append(f"💥​ UV Index: {value} is high! Use sunscreen and avoid direct sun exposure.")
+            elif measurement_type == "Temperature":
+                alerts_triggered.append(f"🔥 Temperature: {value}°C is dangerously high! Stay hydrated and avoid outdoor activities.")
+            elif measurement_type == "PM1":
+                alerts_triggered.append(f"🫁​ PM1: {value} µg/m³ exceeds safe limits! Air quality is poor, avoid outdoor activities.")
+            elif measurement_type == "PM2.5":
+                alerts_triggered.append(f"😷​ PM2.5: {value} µg/m³ exceeds safe limits! Air quality is poor, consider wearing a mask.")
+            elif measurement_type == "PM10":
+                alerts_triggered.append(f"🚨 PM10: {value} µg/m³ exceeds the recommended threshold! Stay indoors to reduce exposure to harmful air.")
+            elif measurement_type == "Wind Speed":
+                alerts_triggered.append(f"​🌪️ Wind Speed: {value} m/s is dangerously high! Secure loose items and stay indoors.")
+            elif measurement_type == "Rainfall":
+                alerts_triggered.append(f"🌧️ Rainfall: {value} mm/h is too high! Take shelter and avoid outdoor activities.")
+
+    if alerts_triggered:
+        alert_message = "<b>🚨 **WARNING!** 🚨</b>\n\n" + "\n".join(alerts_triggered)
+        bot.send_message(chat_id, alert_message, parse_mode='HTML')
+    else:
+        bot.send_message(chat_id, "✅ All measurements are within safe limits.")
 
 
 @bot.message_handler(commands=['Map'])
