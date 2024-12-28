@@ -1,6 +1,6 @@
+#from django.http import JsonResponse
 #from django.views import View
 import requests
-from django.http import JsonResponse
 import telebot
 from telebot import types
 import threading
@@ -9,17 +9,16 @@ import os
 from dotenv import load_dotenv
 from bot.models import Device
 from collections import defaultdict
-from users.utils import save_telegram_user,save_users_locations
-import logging
+import django
+from django.conf import settings
+#from users.utils import save_telegram_user,save_users_locations
+#import logging
 
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
-
-import django
-from django.conf import settings
 django.setup()
 
 def get_device_data():
@@ -95,11 +94,10 @@ def start(message):
         message.chat.id,
         '🌤️ Welcome to ClimateNet! 🌧️'
     )
-    save_telegram_user(message.from_user)
+    #save_telegram_user(message.from_user)
     bot.send_message(
         message.chat.id,
         f'''Hello {message.from_user.first_name}! 👋​ I am your personal climate assistant. 
-        
 With me, you can: 
     🔹​​​ Access current measurements of temperature, humidity, wind speed, and more, which are refreshed every 15 minutes for reliable updates.
 '''
@@ -117,19 +115,19 @@ def handle_country_selection(message):
 
     bot.send_message(chat_id, 'Please choose a device: ✅​', reply_markup=markup)
 
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)
 
-def telegram_webhook(request):
-    if request.method == "POST":
-        data = request.json()
-        message = data.get('message', {})
-        from_user = message.get('from', {})
-        logger.info(f"Received data: {data}")
-        if message.get('text') == "/start":
-            save_telegram_user(from_user)
-            return JsonResponse({"text": "Welcome! You have been registered."})
-        return JsonResponse({"text": "Command not recognized."})
-    return JsonResponse({"text": "This endpoint only supports POST requests."})
+# def telegram_webhook(request):
+#     if request.method == "POST":
+#         data = request.json()
+#         message = data.get('message', {})
+#         from_user = message.get('from', {})
+#         logger.info(f"Received data: {data}")
+#         if message.get('text') == "/start":
+#             save_telegram_user(from_user)
+#             return JsonResponse({"text": "Welcome! You have been registered."})
+#         return JsonResponse({"text": "Command not recognized."})
+#     return JsonResponse({"text": "This endpoint only supports POST requests."})
 
 def uv_index(uv):
     if uv is None:
@@ -225,7 +223,7 @@ def get_command_menu():
         types.KeyboardButton('/Help ❓'),
         types.KeyboardButton('/Website 🌐'),
         types.KeyboardButton('/Map 🗺️'),
-        types.KeyboardButton('/Share_location 🌍​'),
+        #types.KeyboardButton('/Share_location 🌍​'),
     )
     return command_markup
 
