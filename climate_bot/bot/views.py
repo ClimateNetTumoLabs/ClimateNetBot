@@ -1,5 +1,5 @@
-#from django.http import JsonResponse
-#from django.views import View
+from django.http import JsonResponse
+from django.views import View
 import requests
 import telebot
 from telebot import types
@@ -145,7 +145,7 @@ def uv_index(uv):
 
 def pm_level(pm, pollutant):
     if pm is None:
-        return " "
+        return "N/A"
 
     thresholds = {
         "PM1.0": [50, 100, 150, 200, 300],
@@ -168,6 +168,40 @@ def pm_level(pm, pollutant):
     
     return levels[-1]
 
+def get_formatted_data(measurement,selected_device):
+    uv_description = uv_index(measurement['uv'])
+    pm1_description = pm_level(measurement['pm1'], "PM1.0")
+    pm2_5_description = pm_level(measurement['pm2_5'], "PM2.5")
+    pm10_description = pm_level(measurement['pm10'], "PM10")
+    if selected_device in devices_with_issues:
+        technical_issues_message = "\n⚠️ Note: At this moment this device has technical issues."
+    else:
+        technical_issues_message = ""
+        # f"📊 <b>Latest Measurement for Device:</b> <b>{selected_device}</b> ({measurement['timestamp']})\n\n"
+    return (
+
+        f"<b>𝗟𝗮𝘁𝗲𝘀𝘁 𝗠𝗲𝗮𝘀𝘂𝗿𝗲𝗺𝗲𝗻𝘁</b>\n"
+        f"🔹 <b>Device:</b> <b>{selected_device}</b>\n"
+        f"🔹 <b>Timestamp:</b> {measurement['timestamp']}\n\n"
+        f"<b> 𝗟𝗶𝗴𝗵𝘁 𝗮𝗻𝗱 𝗨𝗩 𝗜𝗻𝗳𝗼𝗿𝗺𝗮𝘁𝗶𝗼𝗻</b>\n"
+        f"☀️ <b>UV Index:</b> {measurement['uv']} ({uv_description})\n"
+        f"🔆 <b>Light Intensity:</b> {measurement['lux']} lux\n\n"
+        f"<b> 𝗘𝗻𝘃𝗶𝗿𝗼𝗻𝗺𝗲𝗻𝘁𝗮𝗹 𝗖𝗼𝗻𝗱𝗶𝘁𝗶𝗼𝗻𝘀</b>\n"
+        f"🌡️ <b>Temperature:</b> {measurement['temperature']}°C\n"
+        f"⏲️ <b>Atmospheric Pressure:</b> {measurement['pressure']} hPa\n"
+        f"💧 <b>Humidity:</b> {measurement['humidity']}%\n\n"
+        f"<b> 𝗔𝗶𝗿 𝗤𝘂𝗮𝗹𝗶𝘁𝘆 𝗟𝗲𝘃𝗲𝗹𝘀</b>\n"
+        f"🫁 <b>PM1.0:</b> {measurement['pm1']} µg/m³  ({pm1_description})\n"
+        f"💨 <b>PM2.5:</b> {measurement['pm2_5']} µg/m³ ({pm2_5_description})\n"
+        f"🌫️ <b>PM10:</b> {measurement['pm10']} µg/m³ ({pm10_description})\n\n"
+        f"<b>𝗪𝗲𝗮𝘁𝗵𝗲𝗿 𝗖𝗼𝗻𝗱𝗶𝘁𝗶𝗼𝗻 </b>\n"
+        f"🌪️ <b>Wind Speed:</b> {measurement['wind_speed']} m/s\n"
+        f"🌧️ <b>Rainfall:</b> {measurement['rain']} mm\n"
+        f"🧭 <b>Wind Direction:</b> {measurement['wind_direction']}\n"
+        f"{technical_issues_message}"
+    )
+    
+
 @bot.message_handler(func=lambda message: message.text in [device for devices in locations.values() for device in devices])
 def handle_device_selection(message):
     selected_device = message.text
@@ -179,32 +213,10 @@ def handle_device_selection(message):
         user_context[chat_id]['device_id'] = device_id
 
     if device_id:
-        command_markup = get_command_menu()
+        command_markup = get_command_menu(cur=selected_device)
         measurement = fetch_latest_measurement(device_id)
         if measurement:
-            uv_description = uv_index(measurement['uv'])
-            pm1_description = pm_level(measurement['pm1'], "PM1.0")
-            pm2_5_description = pm_level(measurement['pm2_5'], "PM2.5")
-            pm10_description = pm_level(measurement['pm10'], "PM10")
-            if selected_device in devices_with_issues:
-                technical_issues_message = "\n⚠️ Note: At this moment this device has technical issues."
-            else:
-                technical_issues_message = ""
-            formatted_data = (
-                f"Latest Measurements in <b>{selected_device}</b> {measurement['timestamp']}\n\n"
-                f"☀️ UV Index: {measurement['uv']} ({uv_description})\n"
-                f"🔆​ Light Intensity: {measurement['lux']} lux\n"
-                f"🌡️ Temperature: {measurement['temperature']}°C\n"
-                f"⏲️ Pressure: {measurement['pressure']} hPa\n"
-                f"💧 Humidity: {measurement['humidity']}%\n"
-                f"🫁 PM1: {measurement['pm1']} µg/m³ ({pm1_description})\n"
-                f"💨 PM2.5: {measurement['pm2_5']} µg/m³ ({pm2_5_description})\n"
-                f"🌫️ PM10: {measurement['pm10']} µg/m³ ({pm10_description})\n"
-                f"🌪️ Wind Speed: {measurement['wind_speed']} m/s\n"
-                f"🌧️ Rainfall: {measurement['rain']} mm\n"
-                f"🧭​ Wind Direction: {measurement['wind_direction']}\n"
-                f"{technical_issues_message}"
-            )
+            formatted_data = get_formatted_data(measurement=measurement,selected_device=selected_device)
             
             bot.send_message(chat_id, formatted_data, reply_markup=command_markup, parse_mode='HTML')
             bot.send_message(chat_id, '''For the next measurement, select\t
@@ -215,10 +227,12 @@ def handle_device_selection(message):
         bot.send_message(chat_id, "⚠️ Device not found. ❌​")
 
 
-def get_command_menu():
+def get_command_menu(cur=None):
+    if cur is None:
+        cur = ""
     command_markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
     command_markup.add(
-        types.KeyboardButton('/Current 📍'),
+        types.KeyboardButton(f'/Current 📍{cur}'),
         types.KeyboardButton('/Change_device 🔄'),
         types.KeyboardButton('/Help ❓'),
         types.KeyboardButton('/Website 🌐'),
@@ -235,31 +249,12 @@ def get_current_data(message):
     if chat_id in user_context and 'device_id' in user_context[chat_id]:
         device_id = user_context[chat_id]['device_id']
         selected_device = user_context[chat_id].get('selected_device')
+        command_markup = get_command_menu(cur=selected_device)
+
         measurement = fetch_latest_measurement(device_id)
         if measurement:
-            uv_description = uv_index(measurement['uv'])
-            pm1_description = pm_level(measurement['pm1'], "PM1.0")
-            pm2_5_description = pm_level(measurement['pm2_5'], "PM2.5")
-            pm10_description = pm_level(measurement['pm10'], "PM10")
-            if selected_device in devices_with_issues:
-                technical_issues_message = "\n⚠️ Note: At this moment this device has technical issues."
-            else:
-                technical_issues_message = ""
-            formatted_data = (
-                f"Latest Measurement in <b>{selected_device}</b> {measurement['timestamp']}\n\n"
-                f"☀️ UV Index: {measurement['uv']} ({uv_description})\n"
-                f"🔆​ Light Intensity: {measurement['lux']} lux\n"
-                f"🌡️ Temperature: {measurement['temperature']}°C\n"
-                f"⏲️ Pressure: {measurement['pressure']} hPa\n"
-                f"💧 Humidity: {measurement['humidity']}%\n"
-                f"🫁 PM1: {measurement['pm1']} µg/m³ ({pm1_description})\n"
-                f"💨 PM2.5: {measurement['pm2_5']} µg/m³ ({pm2_5_description})\n"
-                f"🌫️ PM10: {measurement['pm10']} µg/m³ ({pm10_description})\n"
-                f"🌪️ Wind Speed: {measurement['wind_speed']} m/s\n"
-                f"🌧️ Rainfall: {measurement['rain']} mm\n"
-                f"🧭​ Wind Direction: {measurement['wind_direction']}\n"
-                f"{technical_issues_message}"
-            )
+            formatted_data = get_formatted_data(measurement=measurement,selected_device=selected_device)
+
             bot.send_message(chat_id, formatted_data, reply_markup=command_markup, parse_mode='HTML')
             bot.send_message(chat_id, '''For the next measurement, select\t
 /Current 📍 every quarter of the hour. 🕒​''')
@@ -403,6 +398,6 @@ You can see all available commands by typing /Help❓
 
 if __name__ == "__main__":
     start_bot_thread()
-# def run_bot_view(request):
-#     start_bot_thread()
-#     return JsonResponse({'status': 'Bot is running in the background!'})
+def run_bot_view(request):
+    start_bot_thread()
+    return JsonResponse({'status': 'Bot is running in the background!'})
