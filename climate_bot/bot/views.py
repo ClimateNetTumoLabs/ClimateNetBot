@@ -11,7 +11,8 @@ from bot.models import Device
 from collections import defaultdict
 import django
 from django.conf import settings
-#from users.utils import save_telegram_user,save_users_locations
+from users.utils import save_telegram_user,save_users_locations
+from BotAnalytics.views import log_command_decorator
 #import logging
 
 load_dotenv()
@@ -89,12 +90,13 @@ def send_location_selection(chat_id):
     bot.send_message(chat_id, 'Please choose a location: 📍', reply_markup=location_markup)
 
 @bot.message_handler(commands=['start'])
+@log_command_decorator
 def start(message):
     bot.send_message(
         message.chat.id,
         '🌤️ Welcome to ClimateNet! 🌧️'
     )
-    #save_telegram_user(message.from_user)
+    save_telegram_user(message.from_user)
     bot.send_message(
         message.chat.id,
         f'''Hello {message.from_user.first_name}! 👋​ I am your personal climate assistant. 
@@ -105,6 +107,7 @@ With me, you can:
     send_location_selection(message.chat.id)
 
 @bot.message_handler(func=lambda message: message.text in locations.keys())
+@log_command_decorator
 def handle_country_selection(message):
     selected_country = message.text
     chat_id = message.chat.id
@@ -114,6 +117,7 @@ def handle_country_selection(message):
         markup.add(types.KeyboardButton(device))
 
     bot.send_message(chat_id, 'Please choose a device: ✅​', reply_markup=markup)
+
 
 # logger = logging.getLogger(__name__)
 
@@ -203,6 +207,7 @@ def get_formatted_data(measurement,selected_device):
     
 
 @bot.message_handler(func=lambda message: message.text in [device for devices in locations.values() for device in devices])
+@log_command_decorator
 def handle_device_selection(message):
     selected_device = message.text
     chat_id = message.chat.id
@@ -237,11 +242,12 @@ def get_command_menu(cur=None):
         types.KeyboardButton('/Help ❓'),
         types.KeyboardButton('/Website 🌐'),
         types.KeyboardButton('/Map 🗺️'),
-        #types.KeyboardButton('/Share_location 🌍​'),
+        types.KeyboardButton('/Share_location 🌍​'),
     )
     return command_markup
 
 @bot.message_handler(commands=['Current'])
+@log_command_decorator
 def get_current_data(message):
     chat_id = message.chat.id
     command_markup = get_command_menu()
@@ -264,6 +270,7 @@ def get_current_data(message):
         bot.send_message(chat_id, "⚠️ Please select a device first using /Change_device 🔄.", reply_markup=command_markup)
 
 @bot.message_handler(commands=['Help'])
+@log_command_decorator
 def help(message):
     bot.send_message(message.chat.id, '''
 <b>/Current 📍:</b> Get the latest climate data in selected location.\n
@@ -271,11 +278,13 @@ def help(message):
 <b>/Help ❓:</b> Show available commands.\n
 <b>/Website 🌐:</b> Visit our website for more information.\n
 <b>/Map 🗺️​:</b> View the locations of all devices on a map.\n
+<b>/Share_location 🌍​:</b> Share your location.\n
 ''', parse_mode='HTML')
 
 #For future add <b>/Share_location 🌍​:</b> Share your location.\n in commands=['Help']
 
 @bot.message_handler(commands=['Change_device'])
+@log_command_decorator
 def change_device(message):
     chat_id = message.chat.id
 
@@ -285,11 +294,11 @@ def change_device(message):
     send_location_selection(chat_id)
 
 @bot.message_handler(commands=['Website'])
+@log_command_decorator
 def website(message):
     markup = types.InlineKeyboardMarkup()
     button = types.InlineKeyboardButton('Visit Website', url='https://climatenet.am/en/')
     markup.add(button)
-
     bot.send_message(
         message.chat.id,
         'For more information, click the button below to visit our official website: 🖥️​',
@@ -297,6 +306,7 @@ def website(message):
     )
 
 # @bot.message_handler(commands=['Check_safety'])
+# @log_command_decorator
 # def check_safety(message):
 #     chat_id = message.chat.id
 
@@ -342,6 +352,7 @@ def website(message):
 #         bot.send_message(chat_id, "✅ All measurements are within safe limits.")
 
 @bot.message_handler(commands=['Map'])
+@log_command_decorator
 def map(message):
     chat_id = message.chat.id
     image = 'https://images-in-website.s3.us-east-1.amazonaws.com/Bot/map.png'
@@ -350,6 +361,7 @@ def map(message):
 '''📌 The highlighted locations indicate the current active climate devices. 🗺️ ''')
 
 @bot.message_handler(content_types=['audio', 'document', 'photo', 'sticker', 'video', 'video_note', 'voice', 'contact', 'venue', 'animation'])
+@log_command_decorator
 def handle_media(message):
     bot.send_message(
         message.chat.id,
@@ -358,6 +370,7 @@ You can see all available commands by typing /Help❓
 ''')
 
 @bot.message_handler(func=lambda message: not message.text.startswith('/'))
+@log_command_decorator
 def handle_text(message):
     bot.send_message(
         message.chat.id,
@@ -365,36 +378,38 @@ def handle_text(message):
 You can see all available commands by typing /Help❓
 ''')
 
-# @bot.message_handler(commands=['Share_location'])
-# def request_location(message):
-#     location_button = types.KeyboardButton("📍 Share Location", request_location=True)
-#     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-#     markup.add(location_button)
-#     bot.send_message(
-#         message.chat.id,
-#         "Click the button below to share your location 🔽​",
-#         reply_markup=markup
-#     )
+@bot.message_handler(commands=['Share_location'])
+@log_command_decorator
+def request_location(message):
+    location_button = types.KeyboardButton("📍 Share Location", request_location=True)
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+    markup.add(location_button)
+    bot.send_message(
+        message.chat.id,
+        "Click the button below to share your location 🔽​",
+        reply_markup=markup
+    )
 
-# @bot.message_handler(content_types=['location'])
-# def handle_location(message):
-#     user_location = message.location
-#     if user_location:
-#         latitude = user_location.latitude
-#         longitude = user_location.longitude
-#         res = f"{longitude},{latitude}"
-#         save_users_locations(from_user=message.from_user.id, location=res)
-#         command_markup = get_command_menu()
-#         bot.send_message(
-#             message.chat.id,
-#             "Select other commands to continue ▶️​",
-#             reply_markup=command_markup
-#         )
-#     else:
-#         bot.send_message(
-#             message.chat.id,
-#             "Failed to get your location. Please try again."
-#         )
+@bot.message_handler(content_types=['location'])
+@log_command_decorator
+def handle_location(message):
+    user_location = message.location
+    if user_location:
+        latitude = user_location.latitude
+        longitude = user_location.longitude
+        res = f"{longitude},{latitude}"
+        save_users_locations(from_user=message.from_user.id, location=res)
+        command_markup = get_command_menu()
+        bot.send_message(
+            message.chat.id,
+            "Select other commands to continue ▶️​",
+            reply_markup=command_markup
+        )
+    else:
+        bot.send_message(
+            message.chat.id,
+            "Failed to get your location. Please try again."
+        )
 
 if __name__ == "__main__":
     start_bot_thread()

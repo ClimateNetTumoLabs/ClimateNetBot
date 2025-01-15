@@ -1,0 +1,32 @@
+from django.db import models
+from django.contrib.auth.models import User  # If you track specific users
+
+class BotAnalytics(models.Model):
+    user_id = models.CharField(max_length=50)  # Telegram user ID
+    command = models.CharField(max_length=100)  # Command or action
+    timestamp = models.DateTimeField(auto_now_add=True)
+    success = models.BooleanField(default=True)  # Track errors if needed
+    device_location = models.CharField(max_length=255, blank=True, null=True)  # For ClimateNet-specific devices
+
+
+    def __str__(self):
+        return f"{self.user_id} - {self.command} - {self.timestamp}"
+    
+    """ 
+    from django.db import models
+from django.utils.timezone import now
+
+class BotAnalytics(models.Model):
+    user_id = models.CharField(max_length=50)
+    command = models.CharField(max_length=50, blank=True, null=True)
+    timestamp = models.DateTimeField(default=now)
+    device_location = models.CharField(max_length=255, blank=True, null=True)  # For ClimateNet-specific devices
+
+    class Meta:
+        verbose_name_plural = "Bot Analytics"
+
+    def __str__(self):
+        return f"User {self.user_id} - Command: {self.command}"
+
+    
+    """
