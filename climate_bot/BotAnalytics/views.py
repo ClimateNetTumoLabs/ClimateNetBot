@@ -1,25 +1,36 @@
-from django.shortcuts import render
-from .models import BotAnalytics
-
-# Create your views here.
-
-def log_command(chat_id, command, success=True):
-    """Log bot commands for analytics."""
-    BotAnalytics.objects.create(
-        user_id=chat_id,
-        command=command,
-        success=success
-    )
+import time
+from django.db import models  # Import models for aggregation
+from django.utils import timezone  # For accurate timestamping
+from .models import BotAnalytics 
 
 def log_command_decorator(func):
-    def wrapper(message, *args, **kwargs):
-        chat_id = message.chat.id
-        command = message.text
+    def wrapper(message):
+        start_time = time.perf_counter()  # Start timing
         try:
-            result = func(message, *args, **kwargs)  # Execute the original handler
-            log_command(chat_id, command, success=True)
-            return result
+            func(message)
+            success = True
         except Exception as e:
-            log_command(chat_id, command, success=False)
-            raise e
+            success = False
+        end_time = time.perf_counter()  # End timing
+        latency = end_time - start_time
+
+        # Save analytics data
+        print(latency)
+        BotAnalytics.objects.create(
+            user_id=message.from_user.id,
+            command=message.text,
+            success=success,
+            response_time=latency,
+        )
+
+        # Update min/max response times
+        analytics = BotAnalytics.objects.filter(user_id=message.from_user.id)
+        min_latency = analytics.aggregate(models.Min('response_time'))['response_time__min']
+        max_latency = analytics.aggregate(models.Max('response_time'))['response_time__max']
+
+        BotAnalytics.objects.filter(id=analytics.latest('timestamp').id).update(
+            min_response_time=min_latency,
+            max_response_time=max_latency,
+        )
+
     return wrapper

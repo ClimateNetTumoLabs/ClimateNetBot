@@ -3,11 +3,21 @@ from django.db.models import Count, F
 from .models import BotAnalytics
 from django.utils.timezone import now
 from datetime import timedelta
+from django.db.models import Max, Min
 
 class BotAnalyticsAdmin(admin.ModelAdmin):
     change_list_template = "admin/botanalytics_changelist.html"
 
     def changelist_view(self, request, extra_context=None):
+        def get_min_response_time():
+            min_response_time = BotAnalytics.objects.aggregate(Min('response_time'))['response_time__min']
+            return round(min_response_time, 3) if min_response_time is not None else 'N/A'
+        
+
+        # Method to get the maximum response time
+        def get_max_response_time():
+            max_response_time = BotAnalytics.objects.aggregate(Max('response_time'))['response_time__max']
+            return round(max_response_time, 3) if max_response_time is not None else 'N/A'
         # Total users
         total_users = BotAnalytics.objects.values('user_id').distinct().count()
 
@@ -36,6 +46,9 @@ class BotAnalyticsAdmin(admin.ModelAdmin):
 
         # Total commands
         total_commands = BotAnalytics.objects.count()
+        
+        max_res_time = get_max_response_time()
+        min_res_time = get_min_response_time()
 
         # Command usage
         command_usage = (
@@ -62,6 +75,8 @@ class BotAnalyticsAdmin(admin.ModelAdmin):
             'total_commands': total_commands,
             'command_usage': list(command_usage),
             'popular_devices': list(popular_devices),
+            'minimum_respone_time':min_res_time,
+            'maximum_response_time':max_res_time,
         })
         return super().changelist_view(request, extra_context=extra_context)
 

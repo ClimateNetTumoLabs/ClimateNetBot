@@ -7,6 +7,9 @@ class BotAnalytics(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True)
     success = models.BooleanField(default=True)  # Track errors if needed
     device_location = models.CharField(max_length=255, blank=True, null=True)  # For ClimateNet-specific devices
+    response_time = models.FloatField(null=True, blank=True)  # New field for response latency
+    min_response_time = models.FloatField(null=True, blank=True)  # Minimum latency
+    max_response_time = models.FloatField(null=True, blank=True)
 
 
     def __str__(self):
