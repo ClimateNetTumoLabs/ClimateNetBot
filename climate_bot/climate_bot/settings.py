@@ -185,3 +185,4 @@ CORS_ALLOW_METHODS = [
 
 ADMIN_SITE_TITLE = "ClimateNet BOT Admin"
 ADMIN_SITE_HEADER = "ClimateNet BOT Administration"
+CSRF_COOKIE_NAME = 'csrftoken'
