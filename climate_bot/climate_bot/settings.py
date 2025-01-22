@@ -136,9 +136,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ORIGIN_WHITELIST = [
     "http://localhost:8000",
+    "http://localhost:9000",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
+    "http://127.0.0.1:9000",
     "http://climatenet.am",
     "https://dev.climatenet.am",
     "http://dev.climatenet.am",
@@ -146,10 +148,12 @@ CORS_ORIGIN_WHITELIST = [
 ]
 
 CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:9000",
     "http://localhost:8000",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:8000",
+    "http://127.0.0.1:9000",
     "https://dev.climatenet.am",
     "http://dev.climatenet.am",
     "http://climatenet.am",
