@@ -1,62 +1,59 @@
+from django import forms
 from django.contrib import admin
-from django.db.models import Count
-from django.db.models.functions import TruncDay, TruncHour, TruncWeek
-import json
-from datetime import datetime, timedelta
 from .models import TelegramUser
+import telebot
+import os
+import logging
+from django.contrib import messages
+from django.template.response import TemplateResponse
+from django.shortcuts import render, redirect
 
+
+logger = logging.getLogger(__name__)
+
+# Define the form for broadcasting the message
+class BroadcastMessageForm(forms.Form):
+    message = forms.CharField(widget=forms.Textarea, label="Broadcast Message", max_length=4096)
+
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 @admin.register(TelegramUser)
 class TelegramUserAdmin(admin.ModelAdmin):
     list_display = ('telegram_id', 'first_name', 'last_name', 'coordinates', 'joined_at')
+    actions = ['send_broadcast_message']
+    def send_broadcast_message(self, request, queryset):
+        print('mtav')
+        # Check if the form is being submitted
+        if request.method == 'POST':
+            form = BroadcastMessageForm(request.POST)
+            if form.is_valid():
+                message = form.cleaned_data['message']
+                try:
+                    selected_users_ids = request.POST.getlist('selected_users')
+                    selected_users = TelegramUser.objects.filter(id__in=selected_users_ids)
+                    for user in selected_users:
+                        try:
+                            bot.send_message(user.telegram_id, message)
+                        except Exception as e:
+                            logger.error(f"Failed to send message to {user.telegram_id}: {e}")
+                    messages.success(request, "Broadcast message sent successfully!")
+                except Exception as e:
+                    messages.error(request, f"Failed to send message: {e}")
+            else:
+                messages.error(request, "Form is invalid")
+        else:
+            form = BroadcastMessageForm()
 
-    def changelist_view(self, request, extra_context=None):
-        now = datetime.now()
+        # Get all Telegram users for selection in the form
+        users = TelegramUser.objects.all()
+        
+        return render(request, 'send_broadcast_message.html', {
+            'form': form,
+            'users': users
+        })
+        
+        # Return the custom template with the form
+        # return TemplateResponse(request, 'admin/send_broadcast_message.html', extra_context)
 
-        # Generate labels for each range
-        hourly_labels = [f"{minute:02d} min" for minute in range(60)]
-        daily_labels = [f"{hour:02d}:00" for hour in range(24)]
-        weekly_labels = [
-            (now - timedelta(days=i)).strftime('%Y-%m-%d')
-            for i in range(6, -1, -1)  # Last 7 days
-        ]
-
-        # Hourly Data
-        hourly_data = (
-            TelegramUser.objects.annotate(hour=TruncHour('joined_at'), minute=TruncHour('joined_at'))
-            .values('hour')
-            .annotate(count=Count('id'))
-        )
-        hourly_counts = {entry["hour"].strftime('%M'): entry["count"] for entry in hourly_data}
-        hourly_counts_full = [hourly_counts.get(f"{minute:02d}", 0) for minute in range(60)]
-
-        # Daily Data
-        daily_data = (
-            TelegramUser.objects.annotate(hour=TruncHour('joined_at'))
-            .values('hour')
-            .annotate(count=Count('id'))
-        )
-        daily_counts = {entry["hour"].strftime('%H'): entry["count"] for entry in daily_data}
-        daily_counts_full = [daily_counts.get(f"{hour:02d}", 0) for hour in range(24)]
-
-        # Weekly Data
-        weekly_data = (
-            TelegramUser.objects.annotate(week=TruncDay('joined_at'))
-            .values('week')
-            .annotate(count=Count('id'))
-        )
-        weekly_counts = {entry["week"].strftime('%Y-%m-%d'): entry["count"] for entry in weekly_data}
-        weekly_counts_full = [weekly_counts.get(day, 0) for day in weekly_labels]
-
-        # Prepare JSON Data for Chart.js
-        chart_data = {
-            "hourly": {"labels": hourly_labels, "counts": hourly_counts_full},
-            "daily": {"labels": daily_labels, "counts": daily_counts_full},
-            "weekly": {"labels": weekly_labels, "counts": weekly_counts_full},
-        }
-
-        # Add chart data to the context
-        extra_context = extra_context or {}
-        extra_context["chart_data"] = json.dumps(chart_data)
-
-        return super().changelist_view(request, extra_context=extra_context)
+    send_broadcast_message.short_description = "Send broadcast message to selected users"

@@ -191,7 +191,7 @@ def get_formatted_data(measurement,selected_device):
         f"☀️ <b>UV Index:</b> {measurement['uv']} ({uv_description})\n"
         f"🔆 <b>Light Intensity:</b> {measurement['lux']} lux\n\n"
         f"<b> 𝗘𝗻𝘃𝗶𝗿𝗼𝗻𝗺𝗲𝗻𝘁𝗮𝗹 𝗖𝗼𝗻𝗱𝗶𝘁𝗶𝗼𝗻𝘀</b>\n"
-        f"🌡️ <b>Temperature:</b> {measurement['temperature']}°C\n"
+        f"🌡️ <b>Temperature:</b> {int(measurement['temperature'])}°C\n"
         f"⏲️ <b>Atmospheric Pressure:</b> {measurement['pressure']} hPa\n"
         f"💧 <b>Humidity:</b> {measurement['humidity']}%\n\n"
         f"<b> 𝗔𝗶𝗿 𝗤𝘂𝗮𝗹𝗶𝘁𝘆 𝗟𝗲𝘃𝗲𝗹𝘀</b>\n"
