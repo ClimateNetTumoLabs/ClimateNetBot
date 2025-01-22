@@ -133,3 +133,18 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:8000",
+    "https://dev.climatenet.am",
+    "http://dev.climatenet.am",
+    "http://climatenet.am",
+    "https://climatenet.am"
+    "https://emvnh9buoh.execute-api.us-east-1.amazonaws.com",
+]
+
+ADMIN_SITE_TITLE = "ClimateNet BOT Admin"
+ADMIN_SITE_HEADER = "ClimateNet BOT Administration"
