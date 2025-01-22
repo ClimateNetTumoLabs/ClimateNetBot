@@ -157,7 +157,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://dev.climatenet.am",
     "http://dev.climatenet.am",
     "http://climatenet.am",
-    "https://climatenet.am"
+    "https://climatenet.am",  # <-- Corrected
     "https://emvnh9buoh.execute-api.us-east-1.amazonaws.com",
 ]
 CORS_ALLOW_CREDENTIALS = True
