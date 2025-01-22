@@ -251,7 +251,7 @@ def get_command_menu(cur=None):
 def get_current_data(message):
     chat_id = message.chat.id
     command_markup = get_command_menu()
-    
+    save_telegram_user(message.from_user)
     if chat_id in user_context and 'device_id' in user_context[chat_id]:
         device_id = user_context[chat_id]['device_id']
         selected_device = user_context[chat_id].get('selected_device')
