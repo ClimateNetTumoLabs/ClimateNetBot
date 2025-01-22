@@ -23,14 +23,24 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 # django.setup()
 
 def get_device_data():
-    locations = defaultdict(list)
-    device_ids = {}
-    devices = Device.objects.all()
-    for device in devices:
-        device_ids[device.name] = device.generated_id
-        locations[device.parent_name].append(device.name)
+    url = "https://climatenet.am/device_inner/list/"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()  
 
-    return locations, device_ids
+        devices = response.json()
+        
+        locations = defaultdict(list)
+        device_ids = {}
+
+        for device in devices:
+            device_ids[device["name"]] = device["generated_id"]
+            locations[device.get("parent_name", "Unknown")].append(device["name"])
+
+        return locations, device_ids
+    except requests.RequestException as e:
+        print(f"Error fetching device data: {e}")
+        return {}, {}
 
 locations, device_ids = get_device_data()
 user_context = {}
@@ -40,9 +50,11 @@ devices_with_issues = ["Maralik", "Ashotsk", "Gavar", "Yerazgavors", "Artsvaberd
 
 def fetch_latest_measurement(device_id):
     url = f"https://climatenet.am/device_inner/{device_id}/latest/"
+    print(device_id)
     response = requests.get(url)
 
     if response.status_code == 200:
+        print(response.json()) 
         data = response.json()
         if data:
             latest_measurement = data[0]  
@@ -62,6 +74,7 @@ def fetch_latest_measurement(device_id):
                 "wind_direction": latest_measurement.get("direction")
             }
         else:
+            print(data)
             return None
     else:
         print(f"Failed to fetch data: {response.status_code}")
