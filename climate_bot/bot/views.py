@@ -128,6 +128,7 @@ def handle_country_selection(message):
     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
     for device in locations[selected_country]:
         markup.add(types.KeyboardButton(device))
+    markup.add(types.KeyboardButton('/back to menu'))
 
     bot.send_message(chat_id, 'Please choose a device: ✅​', reply_markup=markup)
 
@@ -395,12 +396,24 @@ You can see all available commands by typing /Help❓
 @log_command_decorator
 def request_location(message):
     location_button = types.KeyboardButton("📍 Share Location", request_location=True)
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-    markup.add(location_button)
+    markup = types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True, one_time_keyboard=True)
+    back_to_menu_button = types.KeyboardButton("/back to menu")
+    markup.add(location_button,back_to_menu_button)
     bot.send_message(
         message.chat.id,
         "Click the button below to share your location 🔽​",
         reply_markup=markup
+    )
+    
+@bot.message_handler(commands=['back'])
+def go_back_to_menu(message):
+    # Logic for going back to the menu
+    bot.send_message(
+        message.chat.id,
+        "You are back to the main menu. How can I assist you?",
+        reply_markup=get_command_menu()
+
+        # Remove the custom keyboard
     )
 
 @bot.message_handler(content_types=['location'])
