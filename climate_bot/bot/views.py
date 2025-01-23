@@ -128,7 +128,7 @@ def handle_country_selection(message):
     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
     for device in locations[selected_country]:
         markup.add(types.KeyboardButton(device))
-    markup.add(types.KeyboardButton('/back to menu'))
+    markup.add(types.KeyboardButton('/Change_location'))
 
     bot.send_message(chat_id, 'Please choose a device: ✅​', reply_markup=markup)
 
@@ -307,6 +307,12 @@ def change_device(message):
         user_context[chat_id].pop('device_id', None)
     send_location_selection(chat_id)
 
+@bot.message_handler(commands=['Change_location'])
+@log_command_decorator
+def Change_location(message):
+    chat_id = message.chat.id
+    send_location_selection(chat_id)
+
 @bot.message_handler(commands=['Website'])
 @log_command_decorator
 def website(message):
@@ -397,13 +403,14 @@ You can see all available commands by typing /Help❓
 def request_location(message):
     location_button = types.KeyboardButton("📍 Share Location", request_location=True)
     markup = types.ReplyKeyboardMarkup(row_width=1,resize_keyboard=True, one_time_keyboard=True)
-    back_to_menu_button = types.KeyboardButton("/back to menu")
+    back_to_menu_button = types.KeyboardButton("/back 🔙")
     markup.add(location_button,back_to_menu_button)
     bot.send_message(
         message.chat.id,
         "Click the button below to share your location 🔽​",
         reply_markup=markup
     )
+    
     
 @bot.message_handler(commands=['back'])
 def go_back_to_menu(message):
