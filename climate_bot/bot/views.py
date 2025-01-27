@@ -12,7 +12,8 @@ from collections import defaultdict
 import django
 from django.conf import settings
 from users.utils import save_telegram_user,save_users_locations
-from BotAnalytics.views import log_command_decorator
+from BotAnalytics.views import log_command_decorator,save_selected_device_to_db
+
 #import logging
 
 load_dotenv()
@@ -54,7 +55,7 @@ def fetch_latest_measurement(device_id):
     response = requests.get(url)
 
     if response.status_code == 200:
-        print(response.json()) 
+        # print(response.json()) 
         data = response.json()
         if data:
             latest_measurement = data[0]  
@@ -74,7 +75,7 @@ def fetch_latest_measurement(device_id):
                 "wind_direction": latest_measurement.get("direction")
             }
         else:
-            print(data)
+            # print(data)
             return None
     else:
         print(f"Failed to fetch data: {response.status_code}")
@@ -205,7 +206,7 @@ def get_formatted_data(measurement,selected_device):
         f"☀️ <b>UV Index:</b> {measurement['uv']} ({uv_description})\n"
         f"🔆 <b>Light Intensity:</b> {measurement['lux']} lux\n\n"
         f"<b> 𝗘𝗻𝘃𝗶𝗿𝗼𝗻𝗺𝗲𝗻𝘁𝗮𝗹 𝗖𝗼𝗻𝗱𝗶𝘁𝗶𝗼𝗻𝘀</b>\n"
-        f"🌡️ <b>Temperature:</b> {int(measurement['temperature'])}°C\n"
+        f"🌡️ <b>Temperature:</b> {round(measurement['temperature'])}°C\n"
         f"⏲️ <b>Atmospheric Pressure:</b> {measurement['pressure']} hPa\n"
         f"💧 <b>Humidity:</b> {measurement['humidity']}%\n\n"
         f"<b> 𝗔𝗶𝗿 𝗤𝘂𝗮𝗹𝗶𝘁𝘆 𝗟𝗲𝘃𝗲𝗹𝘀</b>\n"
@@ -230,7 +231,12 @@ def handle_device_selection(message):
     if chat_id in user_context:
         user_context[chat_id]['selected_device'] = selected_device
         user_context[chat_id]['device_id'] = device_id
-
+        # print(message.from_user)
+        print("debug")
+        #[arno] add this log in db using seperate model for get the device analytics
+        """ {'selected_country': 'Yerevan', 'selected_device': 'V. Sargsyan', 'device_id': '8'}} example of  user_context"""
+       
+        save_selected_device_to_db(user_id= message.from_user.id,context=user_context[chat_id],device_id = device_id)
     if device_id:
         command_markup = get_command_menu(cur=selected_device)
         measurement = fetch_latest_measurement(device_id)

@@ -33,3 +33,15 @@ class BotAnalytics(models.Model):
 
     
     """
+
+
+class LocationsAnalytics(models.Model):
+    user_id = models.CharField(max_length=50)  # Telegram user ID
+    timestamp = models.DateTimeField(auto_now_add=True)
+    device_id = models.BigIntegerField(blank=True)
+    device_name = models.CharField(blank=True,max_length=50)
+    device_province = models.CharField(blank=True,max_length=50)
+
+
+    def __str__(self):
+        return f"{self.user_id}  - {self.timestamp} - {self.device_id}"
