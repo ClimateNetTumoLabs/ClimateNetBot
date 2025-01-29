@@ -1,59 +1,75 @@
-from django import forms
 from django.contrib import admin
+from django.contrib import messages
+from django import forms
+from django.http import JsonResponse
+from django.shortcuts import render
 from .models import TelegramUser
 import telebot
 import os
-import logging
-from django.contrib import messages
-from django.template.response import TemplateResponse
-from django.shortcuts import render, redirect
+from django.urls import path
+from .views import send_message_to_users_view
 
 
-logger = logging.getLogger(__name__)
-
-# Define the form for broadcasting the message
-class BroadcastMessageForm(forms.Form):
-    message = forms.CharField(widget=forms.Textarea, label="Broadcast Message", max_length=4096)
-
+# Assuming you have your Telegram Bot Token stored in an environment variable
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
-bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
-@admin.register(TelegramUser)
+# Custom form for writing the message
+class SendMessageForm(forms.Form):
+    message = forms.CharField(widget=forms.Textarea)
+
 class TelegramUserAdmin(admin.ModelAdmin):
-    list_display = ('telegram_id', 'first_name', 'last_name', 'coordinates', 'joined_at')
-    actions = ['send_broadcast_message']
-    def send_broadcast_message(self, request, queryset):
-        print('mtav')
-        # Check if the form is being submitted
-        if request.method == 'POST':
-            form = BroadcastMessageForm(request.POST)
+    list_display = ('telegram_id', 'first_name', 'last_name', 'location', 'joined_at')
+    actions = ['send_message_to_users']
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path('hello/', self.admin_site.admin_view(send_message_to_users_view), name='analytics_data'),
+        ]
+        return custom_urls + urls
+   
+    # Custom admin action to send a message
+    def send_message_to_users(self, request, queryset):
+        print("send_message_to_users function called")
+        print("Request Headers:", request.POST)
+
+        # Handle AJAX request
+        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
+            print("AJAX request detected")
+            form = SendMessageForm(request.POST)
+
             if form.is_valid():
+                print("Form is valid")
                 message = form.cleaned_data['message']
-                try:
-                    selected_users_ids = request.POST.getlist('selected_users')
-                    selected_users = TelegramUser.objects.filter(id__in=selected_users_ids)
-                    for user in selected_users:
-                        try:
-                            bot.send_message(user.telegram_id, message)
-                        except Exception as e:
-                            logger.error(f"Failed to send message to {user.telegram_id}: {e}")
-                    messages.success(request, "Broadcast message sent successfully!")
-                except Exception as e:
-                    messages.error(request, f"Failed to send message: {e}")
-            else:
-                messages.error(request, "Form is invalid")
-        else:
-            form = BroadcastMessageForm()
+                bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
-        # Get all Telegram users for selection in the form
-        users = TelegramUser.objects.all()
-        
-        return render(request, 'send_broadcast_message.html', {
-            'form': form,
-            'users': users
-        })
-        
-        # Return the custom template with the form
-        # return TemplateResponse(request, 'admin/send_broadcast_message.html', extra_context)
+                success_count = 0
+                failure_count = 0
 
-    send_broadcast_message.short_description = "Send broadcast message to selected users"
+                for user in queryset:
+                    try:
+                        bot.send_message(chat_id=user.telegram_id, text=message)
+                        print(f"Message sent to {user.telegram_id}")
+                        success_count += 1
+                    except Exception as e:
+                        failure_count += 1
+                        print(f"Failed to send message to {user.telegram_id}: {e}")
+
+                return JsonResponse({
+                    "success": True,
+                    "message": f"Successfully sent message to {success_count} users. Failed: {failure_count}"
+                })
+
+            print("Form is invalid:", form.errors)
+            return JsonResponse({"success": False, "message": "Invalid form data"}, status=400)
+
+        # Handle normal (non-AJAX) request
+        return render(
+            request,
+            'admin/send_message.html',
+            context={'users': queryset, 'form': SendMessageForm()},
+        )
+
+    send_message_to_users.short_description = "Send a message to selected users"
+
+# Register the model with the custom admin class
+admin.site.register(TelegramUser, TelegramUserAdmin)
