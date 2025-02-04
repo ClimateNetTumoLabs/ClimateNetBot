@@ -1,7 +1,9 @@
-{% extends "admin/base_site.html" %}
-{% load i18n %}
+{% extends 'unfold/layouts/base.html' %}
+{% comment %} {% extends "admin/base_site.html" %} {% endcomment %}
+{% load i18n unfold %}
+{% load static %}
 {% block content %}
-
+{% block breadcrumbs %}{% endblock %}
 <div class="module">
     <h2>📩 Send Message to Selected Users</h2>
     <p>You have selected <strong>{{ users|length }}</strong> user(s).</p>

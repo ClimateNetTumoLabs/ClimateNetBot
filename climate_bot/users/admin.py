@@ -8,7 +8,7 @@ import telebot
 import os
 from django.urls import path
 from .views import send_message_to_users_view
-
+from unfold.admin import ModelAdmin
 
 # Assuming you have your Telegram Bot Token stored in an environment variable
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -17,8 +17,9 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 class SendMessageForm(forms.Form):
     message = forms.CharField(widget=forms.Textarea)
 
-class TelegramUserAdmin(admin.ModelAdmin):
-    list_display = ('telegram_id', 'first_name', 'last_name', 'location', 'joined_at')
+@admin.register(TelegramUser)
+class TelegramUserAdmin(ModelAdmin):
+    list_display = ('telegram_id','user_name', 'first_name', 'last_name', 'location', 'joined_at')
     actions = ['send_message_to_users']
     def get_urls(self):
         urls = super().get_urls()
@@ -72,4 +73,3 @@ class TelegramUserAdmin(admin.ModelAdmin):
     send_message_to_users.short_description = "Send a message to selected users"
 
 # Register the model with the custom admin class
-admin.site.register(TelegramUser, TelegramUserAdmin)

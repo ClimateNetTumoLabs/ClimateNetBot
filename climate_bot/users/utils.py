@@ -6,12 +6,14 @@ def save_telegram_user(from_user):
     telegram_id = from_user.id
     first_name = from_user.first_name
     last_name = from_user.last_name
+    username = from_user.username
 
     print(f"Processing user: {first_name} {last_name} ({telegram_id})")
 
     user, created = TelegramUser.objects.update_or_create(
         telegram_id=telegram_id,
         defaults={
+            'user_name' : username,
             'first_name': first_name,
             'last_name': last_name,
         }

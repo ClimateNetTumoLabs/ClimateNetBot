@@ -46,8 +46,8 @@ def get_device_data():
 locations, device_ids = get_device_data()
 user_context = {}
 
-devices_with_issues = ["Maralik", "Ashotsk", "Gavar", "Yerazgavors", "Artsvaberd", 
-                       "Chambarak", "Areni", "Amasia", "Panik"]
+devices_with_issues = ["Berd", "Ashotsk", "Gavar",  "Artsvaberd", 
+                       "Chambarak", "Areni", "Amasia"]
 
 def fetch_latest_measurement(device_id):
     url = f"https://climatenet.am/device_inner/{device_id}/latest/"
@@ -187,39 +187,50 @@ def pm_level(pm, pollutant):
     
     return levels[-1]
 
-def get_formatted_data(measurement,selected_device):
-    uv_description = uv_index(measurement['uv'])
-    pm1_description = pm_level(measurement['pm1'], "PM1.0")
-    pm2_5_description = pm_level(measurement['pm2_5'], "PM2.5")
-    pm10_description = pm_level(measurement['pm10'], "PM10")
+import math
+
+def get_formatted_data(measurement, selected_device):
+    def safe_value(value, is_round=False):
+        if value is None or (isinstance(value, float) and math.isnan(value)):
+            return "NA"
+        return round(value) if is_round else value
+
+    print("+++++++++++++++++++++++++++++++++++++++")
+    print(measurement.get('uv'))
+    print("+++++++++++++++++++++++++++++++++++++++")
+    
+    uv_description = uv_index(measurement.get('uv'))
+    pm1_description = pm_level(measurement.get('pm1'), "PM1.0")
+    pm2_5_description = pm_level(measurement.get('pm2_5'), "PM2.5")
+    pm10_description = pm_level(measurement.get('pm10'), "PM10")
+    
     if selected_device in devices_with_issues:
         technical_issues_message = "\n⚠️ Note: At this moment this device has technical issues."
     else:
         technical_issues_message = ""
-        # f"📊 <b>Latest Measurement for Device:</b> <b>{selected_device}</b> ({measurement['timestamp']})\n\n"
-    return (
 
+    return (
         f"<b>𝗟𝗮𝘁𝗲𝘀𝘁 𝗠𝗲𝗮𝘀𝘂𝗿𝗲𝗺𝗲𝗻𝘁</b>\n"
         f"🔹 <b>Device:</b> <b>{selected_device}</b>\n"
-        f"🔹 <b>Timestamp:</b> {measurement['timestamp']}\n\n"
+        f"🔹 <b>Timestamp:</b> {safe_value(measurement.get('timestamp'))}\n\n"
         f"<b> 𝗟𝗶𝗴𝗵𝘁 𝗮𝗻𝗱 𝗨𝗩 𝗜𝗻𝗳𝗼𝗿𝗺𝗮𝘁𝗶𝗼𝗻</b>\n"
-        f"☀️ <b>UV Index:</b> {measurement['uv']} ({uv_description})\n"
-        f"🔆 <b>Light Intensity:</b> {measurement['lux']} lux\n\n"
+        f"☀️ <b>UV Index:</b> {safe_value(measurement.get('uv'))} ({uv_description})\n"
+        f"🔆 <b>Light Intensity:</b> {safe_value(measurement.get('lux'))} lux\n\n"
         f"<b> 𝗘𝗻𝘃𝗶𝗿𝗼𝗻𝗺𝗲𝗻𝘁𝗮𝗹 𝗖𝗼𝗻𝗱𝗶𝘁𝗶𝗼𝗻𝘀</b>\n"
-        f"🌡️ <b>Temperature:</b> {round(measurement['temperature'])}°C\n"
-        f"⏲️ <b>Atmospheric Pressure:</b> {measurement['pressure']} hPa\n"
-        f"💧 <b>Humidity:</b> {measurement['humidity']}%\n\n"
+        f"🌡️ <b>Temperature:</b> {safe_value(measurement.get('temperature'), is_round=True)}°C\n"
+        f"⏲️ <b>Atmospheric Pressure:</b> {safe_value(measurement.get('pressure'))} hPa\n"
+        f"💧 <b>Humidity:</b> {safe_value(measurement.get('humidity'))}%\n\n"
         f"<b> 𝗔𝗶𝗿 𝗤𝘂𝗮𝗹𝗶𝘁𝘆 𝗟𝗲𝘃𝗲𝗹𝘀</b>\n"
-        f"🫁 <b>PM1.0:</b> {measurement['pm1']} µg/m³  ({pm1_description})\n"
-        f"💨 <b>PM2.5:</b> {measurement['pm2_5']} µg/m³ ({pm2_5_description})\n"
-        f"🌫️ <b>PM10:</b> {measurement['pm10']} µg/m³ ({pm10_description})\n\n"
+        f"🫁 <b>PM1.0:</b> {safe_value(measurement.get('pm1'))} µg/m³  ({pm1_description})\n"
+        f"💨 <b>PM2.5:</b> {safe_value(measurement.get('pm2_5'))} µg/m³ ({pm2_5_description})\n"
+        f"🌫️ <b>PM10:</b> {safe_value(measurement.get('pm10'))} µg/m³ ({pm10_description})\n\n"
         f"<b>𝗪𝗲𝗮𝘁𝗵𝗲𝗿 𝗖𝗼𝗻𝗱𝗶𝘁𝗶𝗼𝗻 </b>\n"
-        f"🌪️ <b>Wind Speed:</b> {measurement['wind_speed']} m/s\n"
-        f"🌧️ <b>Rainfall:</b> {measurement['rain']} mm\n"
-        f"🧭 <b>Wind Direction:</b> {measurement['wind_direction']}\n"
+        f"🌪️ <b>Wind Speed:</b> {safe_value(measurement.get('wind_speed'))} m/s\n"
+        f"🌧️ <b>Rainfall:</b> {safe_value(measurement.get('rain'))} mm\n"
+        f"🧭 <b>Wind Direction:</b> {safe_value(measurement.get('wind_direction'))}\n"
         f"{technical_issues_message}"
     )
-    
+
 
 @bot.message_handler(func=lambda message: message.text in [device for devices in locations.values() for device in devices])
 @log_command_decorator
@@ -228,11 +239,11 @@ def handle_device_selection(message):
     chat_id = message.chat.id
     device_id = device_ids.get(selected_device)
     
+    
     if chat_id in user_context:
         user_context[chat_id]['selected_device'] = selected_device
         user_context[chat_id]['device_id'] = device_id
         # print(message.from_user)
-        print("debug")
         #[arno] add this log in db using seperate model for get the device analytics
         """ {'selected_country': 'Yerevan', 'selected_device': 'V. Sargsyan', 'device_id': '8'}} example of  user_context"""
        
@@ -240,6 +251,9 @@ def handle_device_selection(message):
     if device_id:
         command_markup = get_command_menu(cur=selected_device)
         measurement = fetch_latest_measurement(device_id)
+        print("===============================")
+        print(user_context[chat_id])
+        print("===============================")
         if measurement:
             formatted_data = get_formatted_data(measurement=measurement,selected_device=selected_device)
             

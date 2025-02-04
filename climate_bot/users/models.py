@@ -5,6 +5,7 @@ class TelegramUser(models.Model):
     telegram_id = models.BigIntegerField(unique=True)
     first_name = models.CharField(max_length=100, null=True, blank=True)
     last_name = models.CharField(max_length=100, null=True, blank=True)
+    user_name = models.CharField(max_length=100, null=True, blank=True)
     location = models.CharField(max_length=100, null=True, blank=True)
     coordinates = models.CharField(max_length=50, 
                                     help_text="Latitude, Longitude (e.g., 40.7128, -74.0060)", 
