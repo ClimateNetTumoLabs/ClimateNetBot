@@ -3,6 +3,7 @@ from django.contrib.auth.models import User  # If you track specific users
 
 class BotAnalytics(models.Model):
     user_id = models.CharField(max_length=50)  # Telegram user ID
+    user_name = models.CharField(max_length=40,blank=True)
     command = models.CharField(max_length=100)  # Command or action
     timestamp = models.DateTimeField(auto_now_add=True)
     success = models.BooleanField(default=True)  # Track errors if needed
@@ -13,7 +14,7 @@ class BotAnalytics(models.Model):
 
 
     def __str__(self):
-        return f"{self.user_id} - {self.command} - {self.timestamp}"
+        return f"{self.user_id} - {self.user_name} - {self.command} - {self.timestamp}"
     
     """ 
     from django.db import models

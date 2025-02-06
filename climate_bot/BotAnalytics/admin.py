@@ -83,8 +83,15 @@ class BotAnalyticsAdmin(admin.ModelAdmin):
         return super().changelist_view(request, extra_context=extra_context)
 
 
-from datetime import datetime
+
+from datetime import datetime, timedelta
 from django.utils.dateparse import parse_datetime
+from django.utils.timezone import make_aware
+from django.db.models import Count
+from django.http import JsonResponse
+from django.urls import path
+from django.contrib import admin
+from .models import LocationsAnalytics
 
 @admin.register(LocationsAnalytics)
 class LocationsAnalyticsAdmin(admin.ModelAdmin):
@@ -99,36 +106,51 @@ class LocationsAnalyticsAdmin(admin.ModelAdmin):
         return custom_urls + urls
 
     def analytics_data(self, request):
-        # Get start and end date from query parameters (if provided)
+        # Get query parameters
         start_date_str = request.GET.get('startDate')
         end_date_str = request.GET.get('endDate')
+        time_range = request.GET.get('timeRange')  # daily, weekly, yearly
 
-        # Parse the dates if they exist
-        start_date = parse_datetime(start_date_str) if start_date_str else None
-        end_date = parse_datetime(end_date_str) if end_date_str else None
+        # Set default range to today
+        today = datetime.now().date()
+        start_date = make_aware(datetime.combine(today, datetime.min.time()))
+        end_date = make_aware(datetime.combine(today, datetime.max.time()))
 
-        # Fetch province usage data with optional date range filtering
-        query = LocationsAnalytics.objects.values('device_province').annotate(count=Count('device_province'))
+        # Handle explicit startDate and endDate if provided
+        if start_date_str:
+            parsed_start = parse_datetime(start_date_str)
+            if parsed_start:
+                start_date = parsed_start
 
-        # Apply date range filter if start_date and end_date are provided
-        if start_date:
-            query = query.filter(timestamp__gte=start_date)
-        if end_date:
-            query = query.filter(timestamp__lte=end_date)
+        if end_date_str:
+            parsed_end = parse_datetime(end_date_str)
+            if parsed_end:
+                end_date = parsed_end
 
-        province_data = query.order_by('-count')
+        # If no explicit dates are given, use timeRange
+        if not start_date_str and not end_date_str and time_range:
+            if time_range == 'daily':
+                start_date = make_aware(datetime.combine(today, datetime.min.time()))
+                end_date = make_aware(datetime.combine(today, datetime.max.time()))
+            elif time_range == 'weekly':
+                start_date = make_aware(datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time()))
+                end_date = make_aware(datetime.combine(today, datetime.max.time()))
+            elif time_range == 'yearly':
+                start_date = make_aware(datetime.combine(datetime(today.year, 1, 1), datetime.min.time()))
+                end_date = make_aware(datetime.combine(datetime(today.year, 12, 31), datetime.max.time()))
+
+        # Fetch province usage data with date range filtering
+        query = LocationsAnalytics.objects.filter(timestamp__range=(start_date, end_date)) \
+            .values('device_province').annotate(count=Count('device_province')).order_by('-count')
 
         # If a specific province is selected, fetch device data for it
         selected_province = request.GET.get('province')
         device_data = []
         if selected_province:
-            device_query = LocationsAnalytics.objects.filter(device_province=selected_province)
-
-            # Apply date range filter to device data as well
-            if start_date:
-                device_query = device_query.filter(timestamp__gte=start_date)
-            if end_date:
-                device_query = device_query.filter(timestamp__lte=end_date)
+            device_query = LocationsAnalytics.objects.filter(
+                device_province=selected_province,
+                timestamp__range=(start_date, end_date)
+            )
 
             device_data = (
                 device_query.values('device_name')
@@ -136,7 +158,8 @@ class LocationsAnalyticsAdmin(admin.ModelAdmin):
                 .order_by('-count')
             )
 
-        return JsonResponse({'province_data': list(province_data), 'device_data': list(device_data)})
+        return JsonResponse({'province_data': list(query), 'device_data': list(device_data)})
+
     
 admin.site.register(BotAnalytics, BotAnalyticsAdmin)
 

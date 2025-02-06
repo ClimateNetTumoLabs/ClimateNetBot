@@ -135,11 +135,10 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 # STATIC_URL = 'static/'
-BASE_DIR = os.path.dirname(__file__)
-
+BASE_DIR = Path(__file__).resolve().parent.parent
 STATIC_URL = '/bot/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'static_root')
-MEDIA_URL = '/media/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
+MEDIA_URL = '/bot/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Default primary key field type
@@ -215,7 +214,7 @@ from django.utils.translation import gettext_lazy as _
 UNFOLD = {
     "SITE_TITLE": "Custom suffix in <title> tag",
     "SITE_HEADER": "Appears in sidebar at the top",
-    "SITE_URL": "/bot/",
+    "SITE_URL": "bot/",
     # "SITE_ICON": lambda request: static("icon.svg"),  # both modes, optimise for 32px height
     "SITE_ICON": {
         "light": lambda request: static("icon-light.svg"),  # light mode

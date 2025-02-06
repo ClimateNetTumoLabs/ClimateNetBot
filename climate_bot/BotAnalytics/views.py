@@ -21,6 +21,7 @@ def log_command_decorator(func):
         save_telegram_user(message.from_user)
         BotAnalytics.objects.create(
             user_id=message.from_user.id,
+            user_name=message.from_user.username,
             command=message.text,
             success=success,
             response_time=latency,
