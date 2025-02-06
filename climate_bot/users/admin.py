@@ -9,6 +9,7 @@ import os
 from django.urls import path
 from .views import send_message_to_users_view
 from unfold.admin import ModelAdmin
+import requests
 
 # Assuming you have your Telegram Bot Token stored in an environment variable
 TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -17,10 +18,22 @@ TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 class SendMessageForm(forms.Form):
     message = forms.CharField(widget=forms.Textarea)
 
+def get_username(user_id):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getChat?chat_id={user_id}"
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("ok"):
+            return data["result"].get("username", "hidden")  # Return None if no username
+        return "Not Active"
+    return "Not Active" 
+
+
 @admin.register(TelegramUser)
 class TelegramUserAdmin(ModelAdmin):
     list_display = ('telegram_id','user_name', 'first_name', 'last_name', 'location', 'joined_at')
-    actions = ['send_message_to_users']
+    actions = ['send_message_to_users','update_username']
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
@@ -29,6 +42,24 @@ class TelegramUserAdmin(ModelAdmin):
         return custom_urls + urls
    
     # Custom admin action to send a message
+    
+    
+    def update_username(modeladmin, request, queryset):
+        users_to_update = []
+        for user in queryset:
+            if not user.user_name:  # Only update users with no username
+                username = get_username(user.telegram_id)
+                if username:
+                    user.user_name = username
+                    users_to_update.append(user)
+
+        if users_to_update:
+            TelegramUser.objects.bulk_update(users_to_update, ["user_name"])
+            messages.success(request, f"Updated {len(users_to_update)} usernames successfully.")
+        else:
+            messages.info(request, "No usernames needed updating.")
+            
+        
     def send_message_to_users(self, request, queryset):
         print("send_message_to_users function called")
         print("Request Headers:", request.POST)

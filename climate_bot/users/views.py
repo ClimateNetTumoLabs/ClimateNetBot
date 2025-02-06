@@ -9,6 +9,7 @@ from django import forms
 import telebot
 import os
 import json
+import requests
 
 class SendMessageForm(forms.Form):
     message = forms.CharField(widget=forms.Textarea)
@@ -56,3 +57,23 @@ def send_message_to_users_view(request):
         return JsonResponse({"success": False, "message": "Invalid form data"}, status=400)
 
     return JsonResponse({"success": False, "message": "Invalid request"}, status=400)
+
+
+# def get_username(id):
+#     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN }/getChat?chat_id={id}"
+#     response = requests.get(url)
+
+#     if response.status_code == 200:
+#         data = response.json()
+#         if data["ok"]:
+#             user_info = data["result"]
+#             username = user_info.get("username", "No username")
+#             first_name = user_info.get("first_name", "Unknown")
+#             print(f"Username: @{username}, First Name: {first_name}")
+#             return username
+#         else:
+#             print("Error:", data["description"])
+#             return data["description"]
+#     else:
+#         print("Failed to reach Telegram API")
+#         return "Not Active"
