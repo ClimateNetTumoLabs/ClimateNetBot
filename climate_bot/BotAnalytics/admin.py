@@ -6,10 +6,34 @@ from datetime import timedelta
 from django.db.models import Max, Min
 from django.http import JsonResponse
 from django.urls import path
+from unfold.admin import ModelAdmin
 
-class BotAnalyticsAdmin(admin.ModelAdmin):
+
+class LogData(BotAnalytics):
+    class Meta:
+        proxy = True
+
+@admin.register(LogData)
+class LogAdmin(ModelAdmin):
+    # change_list_template = "admin/botanalytics_changelist.html"
+    list_filter = ['user_name','timestamp']
+    list_display = ['user_id','user_name','command','timestamp']
+    list_filter_sheet = True
+    search_fields = ['user_name','user_id']
+    compressed_fields = True
+    
+# admin.site.register(BotAnalytics,LogAdmin)
+
+    
+    
+@admin.register(BotAnalytics)
+class BotAnalyticsAdmin(ModelAdmin):
     change_list_template = "admin/botanalytics_changelist.html"
-
+    list_filter = ['user_name','timestamp']
+    list_filter_sheet = True
+    search_fields = ['user_name','user_id']
+    # compressed_fields = True
+    
     def changelist_view(self, request, extra_context=None):
         def get_min_response_time():
             min_response_time = BotAnalytics.objects.aggregate(Min('response_time'))['response_time__min']
@@ -161,6 +185,6 @@ class LocationsAnalyticsAdmin(admin.ModelAdmin):
         return JsonResponse({'province_data': list(query), 'device_data': list(device_data)})
 
     
-admin.site.register(BotAnalytics, BotAnalyticsAdmin)
+# admin.site.register(BotAnalytics, BotAnalyticsAdmin)
 
     
