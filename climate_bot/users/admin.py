@@ -30,6 +30,8 @@ def get_username(user_id):
     return "Not Active" 
 
 
+
+
 @admin.register(TelegramUser)
 class TelegramUserAdmin(ModelAdmin):
     list_display = ('telegram_id','user_name', 'first_name', 'last_name', 'location', 'joined_at')

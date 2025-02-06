@@ -7,20 +7,55 @@ from django.db.models import Max, Min
 from django.http import JsonResponse
 from django.urls import path
 from unfold.admin import ModelAdmin
+import requests
+import os
+from django.contrib import messages
+
+
+
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+
+def get_username(user_id):
+    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/getChat?chat_id={user_id}"
+    response = requests.get(url)
+
+    if response.status_code == 200:
+        data = response.json()
+        if data.get("ok"):
+            return data["result"].get("username", "hidden")  # Return None if no username
+        return "Not Active"
+    return "Not Active" 
 
 
 class LogData(BotAnalytics):
     class Meta:
         proxy = True
 
+
+
 @admin.register(LogData)
 class LogAdmin(ModelAdmin):
     # change_list_template = "admin/botanalytics_changelist.html"
     list_filter = ['user_name','timestamp']
     list_display = ['user_id','user_name','command','timestamp']
+    actions=['update_username']
     list_filter_sheet = True
     search_fields = ['user_name','user_id']
     compressed_fields = True
+    def update_username(modeladmin, request, queryset):
+        users_to_update = []
+        for user in queryset:
+            # print(user.user_name)  # Only update users with no username
+            username = get_username(user.user_id)
+            if username:
+                user.user_name = username
+                users_to_update.append(user)
+
+        if users_to_update:
+            LogData.objects.bulk_update(users_to_update, ["user_name"])
+            messages.success(request, f"Updated {len(users_to_update)} usernames successfully.")
+        else:
+            messages.info(request, "No usernames needed updating.")
     
 # admin.site.register(BotAnalytics,LogAdmin)
 
