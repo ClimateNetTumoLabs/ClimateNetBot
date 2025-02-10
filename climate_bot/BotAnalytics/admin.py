@@ -156,7 +156,9 @@ from .models import LocationsAnalytics
 class LocationsAnalyticsAdmin(ModelAdmin):
     list_display = ('user_id', 'device_id', 'device_name', 'device_province')
     change_list_template = "admin/analytics_dashboard.html"
-
+    list_filter = ['device_name','device_province']
+    list_filter_sheet = True
+    search_fields = ['device_name','device_province']
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
