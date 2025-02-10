@@ -1,5 +1,19 @@
-{% extends 'unfold/layouts/base.html' %}
+{% extends "admin/change_list.html" %}
+{% comment %} {% extends 'unfold/layouts/base.html' %} {% endcomment %}
+
+{% comment %} {% extends "admin/base_site.html" %} {% endcomment %}
 {% block content %}
+<div class="dropdown">
+    <button class="btn btn-secondary btn-md rounded-pill shadow-sm" type="button" id="dropdownMenuButton" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown()">
+        Location Analytics Dashboard
+    </button>
+    <div class="dropdown-menu" id="dropdownMenu" aria-labelledby="dropdownMenuButton">
+        <!-- Add the content of the super block inside the dropdown -->
+        <div class="dropdown-item">
+            {{ block.super }}
+        </div>
+    </div>
+</div>
 <h1>Analytics Dashboard</h1>
 <div class="tab-buttons">
     <button class="tab-button active" id="dailyTab">Daily</button>
@@ -221,6 +235,24 @@
 
         renderProvinceChart(response.province_data, currentTab);
         renderDeviceChart(response.device_data, currentTab);
+    });
+</script>
+<script>
+    // Function to toggle dropdown visibility
+    const dropdownMenu = document.getElementById('dropdownMenu');
+    dropdownMenu.style.display = 'none' 
+    function toggleDropdown() {
+        dropdownMenu.style.display = (dropdownMenu.style.display === 'none' || dropdownMenu.style.display === '') ? 'block' : 'none';
+    }
+
+    // Hide the dropdown if clicked outside
+    document.addEventListener('click', function(event) {
+        const dropdownButton = document.getElementById('dropdownMenuButton');
+        const dropdownMenu = document.getElementById('dropdownMenu');
+        
+        if (!dropdownButton.contains(event.target) && !dropdownMenu.contains(event.target)) {
+            dropdownMenu.style.display = 'none';
+        }
     });
 </script>
 {% endblock %}

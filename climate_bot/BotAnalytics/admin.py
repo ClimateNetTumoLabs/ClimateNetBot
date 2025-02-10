@@ -153,7 +153,7 @@ from django.contrib import admin
 from .models import LocationsAnalytics
 
 @admin.register(LocationsAnalytics)
-class LocationsAnalyticsAdmin(admin.ModelAdmin):
+class LocationsAnalyticsAdmin(ModelAdmin):
     list_display = ('user_id', 'device_id', 'device_name', 'device_province')
     change_list_template = "admin/analytics_dashboard.html"
 
@@ -189,11 +189,13 @@ class LocationsAnalyticsAdmin(admin.ModelAdmin):
         # If no explicit dates are given, use timeRange
         if not start_date_str and not end_date_str and time_range:
             if time_range == 'daily':
-                start_date = make_aware(datetime.combine(today, datetime.min.time()))
-                end_date = make_aware(datetime.combine(today, datetime.max.time()))
+                # Last 24 hours
+                start_date = make_aware(datetime.now() - timedelta(days=1))
+                end_date = make_aware(datetime.now())
             elif time_range == 'weekly':
-                start_date = make_aware(datetime.combine(today - timedelta(days=today.weekday()), datetime.min.time()))
-                end_date = make_aware(datetime.combine(today, datetime.max.time()))
+                # Last 7 days from now
+                start_date = make_aware(datetime.now() - timedelta(days=7))
+                end_date = make_aware(datetime.now())
             elif time_range == 'yearly':
                 start_date = make_aware(datetime.combine(datetime(today.year, 1, 1), datetime.min.time()))
                 end_date = make_aware(datetime.combine(datetime(today.year, 12, 31), datetime.max.time()))
