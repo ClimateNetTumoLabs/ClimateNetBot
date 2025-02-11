@@ -307,6 +307,29 @@ UNFOLD = {
                     },
                 ],
             },
+            {
+                "title": _("Analytics"),
+                "separator": True,  # Top border
+                "collapsible": False,  # Collapsible group of links
+                "items": [
+                   
+                    {
+                        "title": _("Location Charts"),
+                        "icon": "map",
+                        "link": reverse_lazy("admin:BotAnalytics_locationsanalytics_changelist"),
+                    },
+                    {
+                        "title": _("Telegram Users"),
+                        "icon": "people",
+                        "link": reverse_lazy("admin:users_telegramuser_changelist"),
+                    },
+                    {
+                        "title": _("Commands Log"),
+                        "icon": "code",
+                        "link": reverse_lazy("admin:BotAnalytics_logdata_changelist"),
+                    },
+                ],
+            },
         ],
     },
     "TABS": [

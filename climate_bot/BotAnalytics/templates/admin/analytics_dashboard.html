@@ -14,7 +14,7 @@
         </div>
     </div>
 </div>
-<h1>Analytics Dashboard</h1>
+{% comment %} <h1>Analytics Dashboard</h1> {% endcomment %}
 <div class="tab-buttons">
     <button class="tab-button active" id="dailyTab">Daily</button>
     <button class="tab-button" id="weeklyTab">Weekly</button>
@@ -23,36 +23,37 @@
 
 <!-- Province Chart -->
  {% comment %} test {% endcomment %}
-<div style="margin: 0 auto; height: 400px;">
+<div style="">
     <h3 id="provinceChartTitle">Daily Chart - Provinces</h3>
-    <canvas id="provinceChart"></canvas>
+    <canvas style="width:100%;" id="provinceChart"></canvas>
 </div>
 
 <!-- Device Chart -->
-<div style="margin: 20px auto; height: 300px;">
+<div style="margin: 20px auto;">
     <h3 id="deviceChartTitle">Devices in Selected Province</h3>
     <canvas id="deviceChart"></canvas>
 </div>
 
 <!-- Data Selection Section -->
-<div style="margin-top: 30px;">
-    <h3>Select Date Range and Province</h3>
-    <div>
-        <label for="startDate">Start Date: </label>
+<div class="data-selection">
+    <h3>Select Date Range & Province</h3>
+    <div class="input-group">
+        <label for="startDate">Start Date</label>
         <input type="date" id="startDate" name="startDate">
     </div>
-    <div>
-        <label for="endDate">End Date: </label>
+    <div class="input-group">
+        <label for="endDate">End Date</label>
         <input type="date" id="endDate" name="endDate">
     </div>
-    <div>
-        <label for="provinceSelect">Province: </label>
+    <div class="input-group">
+        <label for="provinceSelect">Province</label>
         <select id="provinceSelect">
             <!-- Provinces will be populated dynamically -->
         </select>
     </div>
     <button id="downloadCsvBtn">Download CSV</button>
 </div>
+
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
@@ -255,5 +256,171 @@
         }
     });
 </script>
+<style>
+    /* Global Styles */
+    body {
+        font-family: 'Poppins', sans-serif;
+        {% comment %} background: #f4f7f9; {% endcomment %}
+        color: #333;
+        margin: 0;
+        padding: 20px;
+    }
+    
+    /* Full-width Dropdown Button */
+    .dropdown {
+        width: 100%;
+  
+    }
+    
+    .dropdown button {
+        {% comment %} width: 80%; {% endcomment %}
+        {% comment %} background: #007bff; {% endcomment %}
+        border: none;
+        font-size: 18px;
+        font-weight: bold;
+        color: #fff;
+        padding: 12px;
+        border-radius: 50px;
+        transition: all 0.3s ease-in-out;
+        {% comment %} box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2); {% endcomment %}
+    }
+    
+  
+    
+
+  
+    
+    /* Tab Buttons */
+    .tab-buttons {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin: 20px 0;
+    }
+    
+    .tab-button {
+        background: #28a745;
+        border: none;
+        padding: 10px 18px;
+        font-size: 16px;
+        font-weight: bold;
+        color: white;
+        border-radius: 25px;
+        cursor: pointer;
+        transition: all 0.3s ease-in-out;
+    }
+    
+    .tab-button.active {
+        background: #006d2f;
+    }
+    
+    .tab-button:hover {
+        background: #1e7e34;
+    }
+    
+    /* Full-Width Charts */
+    #provinceChartTitle,
+    #deviceChartTitle {
+        text-align: center;
+        font-size: 20px;
+        font-weight: bold;
+        margin-bottom: 10px;
+        color: #ffffff;
+    }
+    
+    canvas {
+        width: 100% !important;
+        height: auto !important;
+        max-height: 500px;
+        display: block;
+        margin: auto;
+        {% comment %} background: #ffffff; {% endcomment %}
+        border-radius: 10px;
+        padding: 15px;
+        margin-bottom:30px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+    }
+    
+    /* Data Selection Card */
+    .data-selection {
+        width: 100%;
+        max-width: 600px;
+        {% comment %} background: white; {% endcomment %}
+        padding: 25px;
+        border-radius: 12px;
+        margin: 30px auto;
+        text-align: center;
+        box-shadow: 0 6px 15px rgba(0, 0, 0, 0.1);
+        {% comment %} border-left: 5px solid #007bff; {% endcomment %}
+    }
+    
+    /* Section Title */
+    .data-selection h3 {
+        font-size: 22px;
+        font-weight: bold;
+        color:white;
+        margin-bottom: 20px;
+    }
+    
+    /* Input Group */
+    .input-group {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        margin-bottom: 15px;
+    }
+    
+    .input-group label {
+        font-size: 16px;
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 5px;
+    }
+    
+    .input-group input,
+    .input-group select {
+        width: 100%;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        {% comment %} background: #f8f9fa; {% endcomment %}
+        font-size: 16px;
+        color:black;
+        transition: all 0.3s ease;
+    }
+    
+    .input-group input:focus,
+    .input-group select:focus {
+        {% comment %} border-color: #007bff; {% endcomment %}
+        {% comment %} background: white; {% endcomment %}
+        outline: none;
+        box-shadow: 0 0 8px rgba(0, 123, 255, 0.2);
+    }
+    
+    /* Download CSV Button */
+    #downloadCsvBtn {
+        width: 100%;
+        background: #007bff;
+        border: none;
+        font-size: 18px;
+        font-weight: bold;
+        color: white;
+        padding: 14px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.3s ease-in-out;
+        margin-top: 15px;
+        box-shadow: 0 4px 10px rgba(0, 123, 255, 0.2);
+    }
+    
+    #downloadCsvBtn:hover {
+        background: #0056b3;
+        box-shadow: 0 6px 15px rgba(0, 123, 255, 0.3);
+    }
+    
+    
+    
+
+</style>
 {% endblock %}
 

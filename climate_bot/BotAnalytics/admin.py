@@ -151,6 +151,7 @@ from django.http import JsonResponse
 from django.urls import path
 from django.contrib import admin
 from .models import LocationsAnalytics
+from django.template.response import TemplateResponse
 
 @admin.register(LocationsAnalytics)
 class LocationsAnalyticsAdmin(ModelAdmin):
@@ -166,6 +167,8 @@ class LocationsAnalyticsAdmin(ModelAdmin):
         ]
         return custom_urls + urls
 
+
+    
     def analytics_data(self, request):
         # Get query parameters
         start_date_str = request.GET.get('startDate')
