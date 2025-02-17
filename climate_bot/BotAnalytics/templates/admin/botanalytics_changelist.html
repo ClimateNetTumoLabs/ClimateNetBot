@@ -8,15 +8,15 @@
 
 <!-- Dropdown for Bot Analytics -->
 <div class="dropdown">
-    <button class="btn btn-secondary btn-md rounded-pill shadow-sm" type="button" id="dropdownMenuButton" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown()">
+    {% comment %} <button class="btn btn-secondary btn-md rounded-pill shadow-sm" type="button" id="dropdownMenuButton" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown()">
         Bot Analytics Dashboard
-    </button>
-    <div class="dropdown-menu" id="dropdownMenu" aria-labelledby="dropdownMenuButton">
+    </button> {% endcomment %}
+    {% comment %} <div class="dropdown-menu" id="dropdownMenu" aria-labelledby="dropdownMenuButton">
         <!-- Add the content of the super block inside the dropdown -->
         <div class="dropdown-item">
-            {% comment %} {{ block.super }} {% endcomment %}
+            {{ block.super }}
         </div>
-    </div>
+    </div> {% endcomment %}
 </div>
 
 <style>
@@ -61,6 +61,11 @@
     .cards {
         display: flex;
         flex-wrap: wrap;
+        gap: 20px;
+    }
+    .cards_row {
+        display: flex;
+        margin-top:20px;
         gap: 20px;
     }
 
@@ -111,6 +116,15 @@
     .chart-container canvas {
         max-height: 300px;
     }
+    .dropdownSection{
+        display:flex;
+        justify-content : space-between;
+    }
+    #dropdownMenu{
+        gap:20px;
+        display:flex;
+    }
+
 </style>
 
 <div class="dashboard">
@@ -121,13 +135,13 @@
         <div class="card">
             <h3><i class="fas fa-users"></i> Total Users</h3>
             <p><strong>Total:</strong> {{ total_users }}</p>
-            <p><strong>Active (Last 7 Days):</strong> {{ active_users }}</p>
+            <p><strong>Active (Last 7 Days):</strong> {{ active_users_len }}</p>
             <p><strong>New (Last 7 Days):</strong> {{ new_users }}</p>
         </div>
 
         <div class="card">
             <h3><i class="fas fa-user-slash"></i> Inactive Users</h3>
-            <p><strong>Inactive (Last 30 Days):</strong> {{ inactive_users }}</p>
+            <p><strong>Inactive (Last 30 Days):</strong> {{ inactive_users_len }}</p>
             <p><strong>Engagement Rate:</strong> {{ engagement_rate|floatformat:2 }}%</p>
         </div>
 
@@ -141,68 +155,69 @@
 
     <!-- Charts Section -->
     <div class="chart-section">
-        <div class="chart-container">
-            <h3>Command Usage</h3>
-            <canvas id="commandUsageChart"></canvas>
-        </div>
+       
         <div class="chart-container">
             <h3>User Engagement</h3>
             <canvas id="userEngagementChart"></canvas>
         </div>
+    </div>
+    <div class="card">
+        <div class="dropdownSection" id="dropdownMenuButton" aria-haspopup="true" aria-expanded="false" onclick="toggleDropdown()">
+            <button class="btn btn-secondary btn-md rounded-pill shadow-sm" type="button" >
+                Bot Analytics Dashboard
+            </button>
+            <i class="fa-solid" id="chevronIcon"></i>
+        </div>
+
+     <div class="cards_row" id="dropdownMenu">
+
+         <div class="card">
+             <h3><i class="fas fa-users"></i> Active Users</h3>
+             <p><strong>Total Active Users:</strong> {{ active_users_len }}</p>
+             <ul>
+                 {% for user in active_users %}
+                     <li>{{ user.user_name }} </li>
+                 {% empty %}
+                     <li>No active users found</li>
+                 {% endfor %}
+             </ul>
+            </div>
+             <div class="card">
+             <h3><i class="fas fa-user-slash"></i> Inactive Users</h3>
+             <p><strong>Total Inactive Users:</strong> {{ inactive_users_len }}</p>
+             <ul>
+                 {% for user in inactive_users  %}
+                     <li>{{ user.user_name }} </li>
+                 {% empty %}
+                     <li>No inactive users found</li>
+                 {% endfor %}
+             </ul>
+         </div>
+     </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+<script id="activeUsersData" type="application/json">{{ active_users|safe }}</script>
+<script id="inactiveUsersData" type="application/json">{{ inactive_users|safe }}</script>
+<script id="newUsersData" type="application/json">{{ new_users|safe }}</script>
 <script>
     // Command Usage Chart
+    const activeUsers = {{active_users_len}};
+    const inactiveUsers = {{inactive_users_len}};
+    const newUsers = {{new_users}};
+    
     const commandUsageData = {{ command_usage|safe }};
     const commandLabels = commandUsageData.map((item) => item.command);
     const commandCounts = commandUsageData.map((item) => item.total);
-
-    new Chart(document.getElementById("commandUsageChart"), {
-        type: "bar",
-        data: {
-            labels: commandLabels,
-            datasets: [
-                {
-                    label: "Usage Count",
-                    data: commandCounts,
-                    backgroundColor: "rgba(75, 192, 192, 0.6)",
-                    borderColor: "rgba(75, 192, 192, 1)",
-                    borderWidth: 1,
-                },
-            ],
-        },
-        options: {
-            responsive: true,
-            plugins: {
-                legend: {
-                    labels: {
-                        color: "white", // Set legend label color to white
-                    },
-                    display: false,
-                },
-            },
-            scales: {
-                x: {
-                    ticks: {
-                        color: "white", // Set X-axis label color to white
-                    },
-                },
-                y: {
-                    ticks: {
-                        color: "white", // Set Y-axis label color to white
-                    },
-                },
-            },
-        },
-    });
+    
+    console.log(activeUsers, inactiveUsers,newUsers);
 
     // User Engagement Chart
-    const activeUsers = {{ active_users|safe }};
-    const inactiveUsers = {{ inactive_users|safe }};
+    {% comment %} const activeUsers = {{ active_users|length }};
+    const inactiveUsers = {{ inactive_users|length }}; {% endcomment %}
 
     new Chart(document.getElementById("userEngagementChart"), {
         type: "doughnut",
@@ -240,9 +255,20 @@
 
 <script>
     // Function to toggle dropdown visibility
+    const dropdownMenu = document.getElementById('dropdownMenu');
+    const chevronIcon = document.getElementById('chevronIcon');
+    dropdownMenu.style.display = 'none'
+    chevronIcon.classList.toggle('fa-chevron-up');
+
+
     function toggleDropdown() {
-        const dropdownMenu = document.getElementById('dropdownMenu');
-        dropdownMenu.style.display = (dropdownMenu.style.display === 'none' || dropdownMenu.style.display === '') ? 'block' : 'none';
+
+        // Toggle dropdown visibility
+        dropdownMenu.style.display = (dropdownMenu.style.display === 'none' || dropdownMenu.style.display === '') ? 'flex' : 'none';
+
+        // Toggle chevron rotation
+        chevronIcon.classList.toggle('fa-chevron-down');
+        chevronIcon.classList.toggle('fa-chevron-up');
     }
 
     // Hide the dropdown if clicked outside

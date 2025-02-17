@@ -10,6 +10,7 @@ from unfold.admin import ModelAdmin
 import requests
 import os
 from django.contrib import messages
+from users.models import TelegramUser
 
 
 
@@ -59,7 +60,7 @@ class LogAdmin(ModelAdmin):
     
 # admin.site.register(BotAnalytics,LogAdmin)
 
-    
+import json
     
 @admin.register(BotAnalytics)
 class BotAnalyticsAdmin(ModelAdmin):
@@ -80,30 +81,31 @@ class BotAnalyticsAdmin(ModelAdmin):
             max_response_time = BotAnalytics.objects.aggregate(Max('response_time'))['response_time__max']
             return round(max_response_time, 3) if max_response_time is not None else 'N/A'
         # Total users
-        total_users = BotAnalytics.objects.values('user_id').distinct().count()
+        total_users = TelegramUser.objects.values('telegram_id').distinct().count()
+        all_users = BotAnalytics.objects.values('user_id','user_name').distinct()
+        
 
         # Active users (last 7 days)
-        active_users = BotAnalytics.objects.filter(timestamp__gte=now() - timedelta(days=7)).values('user_id').distinct().count()
+        active_users = all_users.filter(timestamp__gte=now() - timedelta(days=3)).values('user_id','user_name').distinct()
 
         # New users (last 7 days)
         new_users = (
-            BotAnalytics.objects.filter(timestamp__gte=now() - timedelta(days=7))
-            .values('user_id')
-            .annotate(first_seen=F('timestamp'))
+            TelegramUser.objects.filter(joined_at__gte=now() - timedelta(days=3))
+            .values('telegram_id')
             .distinct()
             .count()
         )
 
         # Inactive users (last 30 days)
-        all_users = BotAnalytics.objects.values('user_id').distinct()
+        print(f"all users : {all_users} \n new Users : {new_users} \n active users { active_users}")
         inactive_users = all_users.exclude(
             user_id__in=BotAnalytics.objects.filter(
-                timestamp__gte=now() - timedelta(days=30)
+                timestamp__gte=now() - timedelta(days=3)
             ).values('user_id')
-        ).count()
-
+        )
+        
         # Engagement rate
-        engagement_rate = (active_users / total_users) * 100 if total_users > 0 else 0
+        engagement_rate = (len( active_users) / total_users) * 100 if total_users > 0 else 0
 
         # Total commands
         total_commands = BotAnalytics.objects.count()
@@ -129,9 +131,11 @@ class BotAnalyticsAdmin(ModelAdmin):
         extra_context = extra_context or {}
         extra_context.update({
             'total_users': total_users,
-            'active_users': active_users,
+            'active_users':  active_users,
+            'active_users_len': len(active_users),
             'new_users': new_users,
             'inactive_users': inactive_users,
+            'inactive_users_len': len(inactive_users),
             'engagement_rate': engagement_rate,
             'total_commands': total_commands,
             'command_usage': list(command_usage),
