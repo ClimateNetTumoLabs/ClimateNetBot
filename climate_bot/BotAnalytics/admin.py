@@ -11,6 +11,7 @@ import requests
 import os
 from django.contrib import messages
 from users.models import TelegramUser
+from .filters import UserStatusFilter
 
 
 
@@ -65,9 +66,9 @@ import json
 @admin.register(BotAnalytics)
 class BotAnalyticsAdmin(ModelAdmin):
     change_list_template = "admin/botanalytics_changelist.html"
-    list_filter = ['user_name','timestamp']
+    list_filter = ['user_name', 'timestamp', UserStatusFilter]  # Added custom filter
     list_filter_sheet = True
-    search_fields = ['user_name','user_id']
+    search_fields = ['user_name', 'user_id']
     # compressed_fields = True
     
     def changelist_view(self, request, extra_context=None):
