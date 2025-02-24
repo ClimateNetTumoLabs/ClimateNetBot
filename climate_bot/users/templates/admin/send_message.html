@@ -1,4 +1,4 @@
-{% extends 'unfold/layouts/base.html' %}
+{% comment %} {% extends 'unfold/layouts/base.html' %} {% endcomment %}
 {% comment %} {% extends "admin/base_site.html" %} {% endcomment %}
 {% load i18n unfold %}
 {% load static %}
@@ -57,6 +57,11 @@
     --fail-light: #f8d7da;
     --fail-dark: #842029;
 }
+body{
+    width:100%;
+    marging:0!important;
+    background:var(--bg-dark)
+}
 
 /* Detect Dark Mode */
 @media (prefers-color-scheme: dark) {
@@ -74,6 +79,8 @@
 /* Main Container */
 .module {
     background: var(--bg-light);
+    {% comment %} width:100%; {% endcomment %}
+    height:100%;
     color: var(--text-light);
     padding: 20px;
     border: 1px solid var(--border-light);

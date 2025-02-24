@@ -64,7 +64,7 @@
         gap: 20px;
     }
     .cards_row {
-        display: flex;
+        display: block;
         margin-top:20px;
         gap: 20px;
     }
@@ -119,10 +119,11 @@
     .dropdownSection{
         display:flex;
         justify-content : space-between;
+        width:100%;
     }
     #dropdownMenu{
         gap:20px;
-        display:flex;
+        display:block;
     }
 
 </style>
@@ -264,7 +265,7 @@
     function toggleDropdown() {
 
         // Toggle dropdown visibility
-        dropdownMenu.style.display = (dropdownMenu.style.display === 'none' || dropdownMenu.style.display === '') ? 'flex' : 'none';
+        dropdownMenu.style.display = (dropdownMenu.style.display === 'none' || dropdownMenu.style.display === '') ? 'block' : 'none';
 
         // Toggle chevron rotation
         chevronIcon.classList.toggle('fa-chevron-down');

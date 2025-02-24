@@ -121,16 +121,23 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 # https://docs.djangoproject.com/en/5.1/topics/i18n/
+from django.utils import timezone
+import pytz
 
 LANGUAGE_CODE = 'en-us'
+timezone.activate(pytz.timezone('Asia/Yerevan'))  # Set UTC+4
 
-TIME_ZONE = 'UTC'
+TIME_ZONE =str( pytz.timezone('Asia/Yerevan'))
 
 USE_I18N = True
 
 USE_TZ = True
 
 
+
+
+
+print(f"____________________ {timezone.now().astimezone(pytz.timezone('Asia/Yerevan'))}")
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
@@ -327,6 +334,11 @@ UNFOLD = {
                         "title": _("Commands Log"),
                         "icon": "code",
                         "link": reverse_lazy("admin:BotAnalytics_logdata_changelist"),
+                    },
+                    {
+                        "title": _("Users Analytics"),
+                        "icon": "search",
+                        "link": reverse_lazy("admin:BotAnalytics_botanalytics_changelist"),
                     },
                 ],
             },

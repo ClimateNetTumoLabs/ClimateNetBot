@@ -21,7 +21,7 @@ class UserStatusFilter(SimpleListFilter):
     def queryset(self, request, queryset):
         # Get the latest activity for each user (latest timestamp)
         latest_activities = BotAnalytics.objects.values('user_id').annotate(last_activity=Max('timestamp'))
-
+        print(f"==============:{latest_activities}")
         # Get the most recent activity logs for active users (last activity more than 3 days ago)
         if self.value() == 'inactive':
             active_user_ids = latest_activities.filter(last_activity__lt=now() - timedelta(days=3)).values_list('user_id', flat=True)
@@ -34,6 +34,6 @@ class UserStatusFilter(SimpleListFilter):
             # Now filter the queryset to get only the last activity for these inactive users
             return queryset.filter(user_id__in=inactive_user_ids, timestamp__in=latest_activities.filter(user_id__in=inactive_user_ids).values('last_activity'))
 
-        return queryset
+        return queryset.filter(timestamp__in=latest_activities.values('last_activity'))
 
 
