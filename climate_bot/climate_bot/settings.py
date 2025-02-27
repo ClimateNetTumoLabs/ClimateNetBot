@@ -249,10 +249,10 @@ UNFOLD = {
     # "THEME": "dark", # Force theme: "dark" or "light". Will disable theme switcher
     
     "STYLES": [
-        lambda request: static("css/style.css"),
+        lambda request: static("unfold/css/styles.css"),
     ],
     "SCRIPTS": [
-        lambda request: static("js/script.js"),
+        lambda request: static("unfold/js/app.js"),
     ],
     "BORDER_RADIUS": "6px",
     "COLORS": {

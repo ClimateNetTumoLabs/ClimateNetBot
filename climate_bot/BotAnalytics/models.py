@@ -7,7 +7,7 @@ class BotAnalytics(models.Model):
     user_id = models.CharField(max_length=50)  # Telegram user ID
     user_name = models.CharField(max_length=40,blank=True)
     command = models.CharField(max_length=100)  # Command or action
-    timestamp = models.DateTimeField(default=timezone.now().astimezone(pytz.timezone('Asia/Yerevan')))
+    timestamp = models.DateTimeField(auto_now_add=True)
     success = models.BooleanField(default=True)  # Track errors if needed
     device_location = models.CharField(max_length=255, blank=True, null=True)  # For ClimateNet-specific devices
     response_time = models.FloatField(null=True, blank=True)  # New field for response latency
