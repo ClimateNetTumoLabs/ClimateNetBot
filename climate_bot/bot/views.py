@@ -23,14 +23,6 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 # django.setup()
 
-ALERT_THRESHOLDS = {
-    "uv": 7,                  # Ուլտրամանուշակագույն բարձր՝ > 7
-    "temperature": 5,        # Շոգ եղանակ՝ > 35°C
-    "wind_speed": 15,         # Ուժեղ քամի՝ > 15 m/s
-    "pm2_5": 75,              # Բարձր օդի աղտոտվածություն՝ > 75 μg/m³
-    "rain": 20                # Ուժեղ տեղումներ՝ > 20 mm
-}
-
 def get_device_data():
     url = "https://climatenet.am/device_inner/list/"
     try:
@@ -87,12 +79,6 @@ def fetch_latest_measurement(device_id):
         print(f"Failed to fetch data: {response.status_code}")
         return None
 
-def start_alert_thread():
-    print("🧵 Starting alert thread...")
-    alert_thread = threading.Thread(target=alert_check_loop)
-    alert_thread.daemon = True
-    alert_thread.start()
-
 def start_bot():
     bot.polling(none_stop=True)
 
@@ -133,17 +119,18 @@ With me, you can:
     send_location_selection(message.chat.id)
 
 @bot.message_handler(func=lambda message: message.text in locations.keys())
+@log_command_decorator
 def handle_country_selection(message):
     selected_country = message.text
     chat_id = message.chat.id
     user_context[chat_id] = {'selected_country': selected_country}
-    
     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
     for device in locations[selected_country]:
         markup.add(types.KeyboardButton(device))
     markup.add(types.KeyboardButton('/Change_location'))
 
     bot.send_message(chat_id, 'Please choose a device: ✅​', reply_markup=markup)
+
 
 # logger = logging.getLogger(__name__)
 
@@ -243,7 +230,6 @@ def get_formatted_data(measurement, selected_device):
         f"{technical_issues_message}"
     )
 
-user_alert_settings = {}
 
 @bot.message_handler(func=lambda message: message.text in [device for devices in locations.values() for device in devices])
 @log_command_decorator
@@ -251,26 +237,25 @@ def handle_device_selection(message):
     selected_device = message.text
     chat_id = message.chat.id
     device_id = device_ids.get(selected_device)
-
+    
+    
     if chat_id in user_context:
         user_context[chat_id]['selected_device'] = selected_device
         user_context[chat_id]['device_id'] = device_id
-
-        save_selected_device_to_db(user_id=message.from_user.id, context=user_context[chat_id], device_id=device_id)
-
+        # print(message.from_user)
+        #[arno] add this log in db using seperate model for get the device analytics
+        """ {'selected_country': 'Yerevan', 'selected_device': 'V. Sargsyan', 'device_id': '8'}} example of  user_context"""
+       
+        save_selected_device_to_db(user_id= message.from_user.id,context=user_context[chat_id],device_id = device_id)
     if device_id:
-        if chat_id in user_alert_settings and user_alert_settings[chat_id].get("status") == "setting_location":
-            user_alert_settings[chat_id] = {
-                "status": "active",
-                "device_id": device_id,
-                "selected_device": selected_device
-            }
-            bot.send_message(chat_id, f"✅ Alerts are now enabled for {selected_device}.", reply_markup=get_command_menu())
-
         command_markup = get_command_menu(cur=selected_device)
         measurement = fetch_latest_measurement(device_id)
+        print("===============================")
+        print(user_context[chat_id])
+        print("===============================")
         if measurement:
-            formatted_data = get_formatted_data(measurement=measurement, selected_device=selected_device)
+            formatted_data = get_formatted_data(measurement=measurement,selected_device=selected_device)
+            
             bot.send_message(chat_id, formatted_data, reply_markup=command_markup, parse_mode='HTML')
             bot.send_message(chat_id, '''For the next measurement, select\t
 /Current 📍 every quarter of the hour. 🕒​''')
@@ -278,7 +263,6 @@ def handle_device_selection(message):
             bot.send_message(chat_id, "⚠️ Error retrieving data. Please try again later.", reply_markup=command_markup)
     else:
         bot.send_message(chat_id, "⚠️ Device not found. ❌​")
-
 
 
 def get_command_menu(cur=None):
@@ -292,7 +276,6 @@ def get_command_menu(cur=None):
         types.KeyboardButton('/Website 🌐'),
         types.KeyboardButton('/Map 🗺️'),
         types.KeyboardButton('/Share_location 🌍​'),
-        types.KeyboardButton('/Alert'),
     )
     return command_markup
 
@@ -360,25 +343,6 @@ def website(message):
         'For more information, click the button below to visit our official website: 🖥️​',
         reply_markup=markup
     )
-
-@bot.message_handler(commands=['Alert'])
-def alert_command(message):
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    markup.add(types.KeyboardButton("Set Alert ✅"), types.KeyboardButton("Remove Alert ❌"))
-    bot.send_message(message.chat.id, "Please choose an option for alerts:", reply_markup=markup)
-
-@bot.message_handler(func=lambda message: message.text == "Set Alert ✅")
-def handle_set_alert(message):
-    send_location_selection(message.chat.id)
-    user_alert_settings[message.chat.id] = {"status": "setting_location"}
-
-@bot.message_handler(func=lambda message: message.text == "Remove Alert ❌")
-def handle_remove_alert(message):
-    if message.chat.id in user_alert_settings:
-        del user_alert_settings[message.chat.id]
-    bot.send_message(message.chat.id, "🔕 Alerts disabled for you.", reply_markup=get_command_menu())
-
-
 
 # @bot.message_handler(commands=['Check_safety'])
 # @log_command_decorator
@@ -499,38 +463,6 @@ def handle_location(message):
             "Failed to get your location. Please try again."
         )
 
-def alert_check_loop():
-    print("✅ alert_check_loop() STARTED")
-
-    while True:
-        print("🔄 Checking alerts...")
-
-        for chat_id, setting in user_alert_settings.items():
-            print(f"🔍 Chat {chat_id} — Status: {setting.get('status')}")
-
-            if setting.get("status") != "active":
-                continue
-
-            device_id = setting.get("device_id")
-            selected_device = setting.get("selected_device")
-
-            measurement = fetch_latest_measurement(device_id)
-            print(f"📡 Measurement from {selected_device}: {measurement}")
-
-            if measurement:
-                alerts = []
-
-                if measurement.get("temperature") and measurement["temperature"] > ALERT_THRESHOLDS["temperature"]:
-                    alerts.append(f"🔥 Temperature is {measurement['temperature']}°C — stay hydrated!")
-
-                if measurement.get("uv") and measurement["uv"] > ALERT_THRESHOLDS["uv"]:
-                    alerts.append(f"☀️ UV Index is {measurement['uv']} — wear sunscreen!")
-
-                if alerts:
-                    message = f"<b>⚠️ Climate Alert for {selected_device} ⚠️</b>\n\n" + "\n".join(alerts)
-                    bot.send_message(chat_id, message, parse_mode="HTML")
-
-
 def detect_weather_condition(measurement):
     temperature = measurement.get("temperature")
     humidity = measurement.get("humidity")
@@ -554,9 +486,6 @@ def detect_weather_condition(measurement):
 
 if __name__ == "__main__":
     start_bot_thread()
-    start_alert_thread()
-
 def run_bot_view(request):
     start_bot_thread()
-    start_alert_thread()
     return JsonResponse({'status': 'Bot is running in the background!'})
