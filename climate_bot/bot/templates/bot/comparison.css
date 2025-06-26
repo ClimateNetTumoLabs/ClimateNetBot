@@ -75,6 +75,7 @@ body {
 .status-moderate { color: #ffc107; }
 .status-unhealthy { color: #fd7e14; }
 .status-dangerous { color: #dc3545; }
+.status-extreme {color: #764ba2}
 
 .device-header {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);

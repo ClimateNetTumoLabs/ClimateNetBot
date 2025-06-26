@@ -21,8 +21,6 @@ import asyncio
 from playwright.async_api import async_playwright
 import traceback
 
-
-# Setup logging
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -180,7 +178,7 @@ def handle_country_selection(message):
     for device in locations[selected_country]:
         markup.add(types.KeyboardButton(device))
     markup.add(types.KeyboardButton('/Change_location'))
-    bot.send_message(chat_id, 'Please choose a location: ✅', reply_markup=markup)
+    bot.send_message(chat_id, 'Please choose a Location: ✅', reply_markup=markup)
 
 
 def uv_index(uv):
@@ -228,13 +226,11 @@ def get_formatted_data(measurement, selected_device):
             return "N/A"
         return f"{round(value)}{unit}" if is_round else f"{value}{unit}"
 
-    # Get descriptions for each measurement
     uv_description = uv_index(measurement.get('uv'))
     pm1_description = pm_level(measurement.get('pm1'), 'PM1.0')
     pm2_5_description = pm_level(measurement.get('pm2_5'), 'PM2.5')
     pm10_description = pm_level(measurement.get('pm10'), 'PM10')
     
-    # Check for technical issues
     technical_issues_message = ""
     if selected_device in devices_with_issues:
         technical_issues_message = "⚠️ <b>Note:</b> This device is currently experiencing technical issues.\n"
@@ -278,18 +274,19 @@ def get_comparison_formatted_data(devices, measurements):
 
 
     def get_status_class(description):
-        if "Good" in description:
-            return "status-good"
-        elif "Moderate" in description:
-            return "status-moderate"
+        if "Very High" in description or "Extreme" in description or "Hazardous" in description:
+            return "status-dangerous"
         elif "Unhealthy" in description or "High" in description:
             return "status-unhealthy"
-        elif "Very High" in description or "Extreme" in description or "Hazardous" in description:
-            return "status-dangerous"
+        elif "Moderate" in description:
+            return "status-moderate"
+        elif "Good" in description or "Low" in description:
+            return "status-good"
+        elif "Extreme":
+            return "status-extreme"
         return ""
+ 
 
-
-    # Load HTML template
     template_path = os.path.join(settings.BASE_DIR,'bot', 'templates','bot', 'comparison.html')
     logger.debug(f"Template path: {os.path.abspath(template_path)}, Exists: {os.path.exists(template_path)}")
     try:
@@ -299,8 +296,6 @@ def get_comparison_formatted_data(devices, measurements):
         logger.error(f"Error: {template_path} not found: {e}")
         return None
 
-
-    # Prepare data for template substitution
     template_data = {}
     device_headers = ""
     timestamp_row = ""
@@ -372,7 +367,6 @@ async def render_html_to_image(html_content, output_path):
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
-            # Save HTML to a temporary file to ensure CSS is applied correctly
             temp_html_path = f"temp_comparison_{uuid.uuid4()}.html"
             with open(temp_html_path, 'w', encoding='utf-8') as f:
                 f.write(html_content)
@@ -380,53 +374,22 @@ async def render_html_to_image(html_content, output_path):
             logger.debug(f"CSS path: {os.path.abspath(css_path)}, Exists: {os.path.exists(css_path)}")
             if not os.path.exists(css_path):
                 raise FileNotFoundError(f"CSS file {css_path} not found")
-            # Load HTML file with file:// protocol
             await page.goto(f"file://{os.path.abspath(temp_html_path)}")
-            # Set viewport size
             await page.set_viewport_size({"width": 1000, "height": 800})
-            # Take screenshot
             await page.screenshot(path=output_path, full_page=True)
             await browser.close()
             logger.debug(f"Screenshot saved to {output_path}")
-            # Clean up temporary HTML file
             os.remove(temp_html_path)
     except Exception as e:
         logger.error(f"Playwright rendering error: {e}")
         raise
-#BRO IDK WHAT IS THIS
+
 def inline_css_into_html(html, css_path):
     with open(css_path, 'r', encoding='utf-8') as f:
         css = f.read()
     return html.replace('<link rel="stylesheet" href="INLINE_CSS_HERE">', f"<style>{css}</style>")
 
-"""def send_comparison_image(chat_id, html_content):
-    if html_content is None:
-        logger.error("HTML content is None")
-        bot.send_message(chat_id, "⚠️ Error generating comparison table. Please try again.")
-        return
-    try:
-        # 🔧 FIX: Set a new event loop because we're in a worker thread
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
 
-        temp_image_path = f"temp_comparison_{uuid.uuid4()}.png"
-        loop.run_until_complete(render_html_to_image(html_content, temp_image_path))
-
-        # Send image to Telegram
-        with open(temp_image_path, 'rb') as photo:
-            bot.send_photo(chat_id, photo)
-
-        # Clean up temporary file
-        os.remove(temp_image_path)
-        logger.debug(f"Image sent and temporary file {temp_image_path} removed")
-
-    except FileNotFoundError as e:
-        logger.error(f"File error: {e}")
-        bot.send_message(chat_id, "⚠️ CSS file missing. Please contact the administrator.")
-    except Exception as e:
-        logger.error(f"Error generating/sending image: {e}")
-        traceback.print_exc()
-        bot.send_message(chat_id, "⚠️ Error generating comparison image. Please try again.")"""
 
 def send_comparison_image(chat_id, html_content):
     if html_content is None:
@@ -434,22 +397,18 @@ def send_comparison_image(chat_id, html_content):
         bot.send_message(chat_id, "⚠️ Error generating comparison table. Please try again.")
         return
     try:
-        # Inject CSS before rendering
         css_path = os.path.join(os.path.dirname(__file__), 'templates', 'bot', 'comparison.css')
         html_content = inline_css_into_html(html_content, css_path)
 
-        # Set a new event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
         temp_image_path = f"temp_comparison_{uuid.uuid4()}.png"
         loop.run_until_complete(render_html_to_image(html_content, temp_image_path))
 
-        # Send image to Telegram
         with open(temp_image_path, 'rb') as photo:
             bot.send_photo(chat_id, photo)
 
-        # Clean up temporary file
         os.remove(temp_image_path)
         logger.debug(f"Image sent and temporary file {temp_image_path} removed")
 
@@ -469,16 +428,13 @@ def handle_device_selection(message):
     chat_id = message.chat.id
     logger.debug(f"Device selected: {selected_device} for chat_id: {chat_id}")
 
-    # Initialize user context if needed
     _initialize_user_context(chat_id)
 
-    # Validate device exists
     device_id = device_ids.get(selected_device)
     if not device_id:
         _handle_device_not_found(chat_id, selected_device)
         return
 
-    # Route to appropriate handler based on mode
     if user_context[chat_id].get('compare_mode'):
         _handle_comparison_mode(chat_id, selected_device, device_id, message.from_user.id)
     else:
@@ -543,17 +499,14 @@ def _execute_comparison(chat_id):
     try:
         logger.debug(f"Comparing {len(compare_devices)} devices: {[d['name'] for d in compare_devices]}")
 
-        # Fetch measurements for all devices
         measurements = _fetch_all_measurements(compare_devices)
 
-        # Generate and send comparison
         html_content = get_comparison_formatted_data(compare_devices, measurements)
         if html_content is None:
             raise Exception("Failed to generate HTML content")
 
         send_comparison_image(chat_id, html_content)
 
-        # Send success message
         command_markup = get_command_menu()
         bot.send_message(
             chat_id,
@@ -795,11 +748,11 @@ def send_location_selection_for_compare(chat_id, device_number):
     if device_number <=5:
         bot.send_message(
             chat_id,
-            f"Please choose a Region {device_number} 📍:",
+            f"Please choose a Region {device_number}: 📍",
             reply_markup=location_markup
         )
     else:
-        bot.send_message(chat_id, "Maximum 5 devices is reached.")
+        bot.send_message(chat_id, "Maximum of 5 devices is reached.")
 
 
 def send_device_selection_for_compare(chat_id, selected_country, device_number):
@@ -926,5 +879,3 @@ if __name__ == "__main__":
 def run_bot_view(request):
     start_bot_thread()
     return JsonResponse({'status': 'Bot is running in the background!'})
-
-
