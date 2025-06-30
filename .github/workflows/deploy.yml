@@ -21,7 +21,7 @@ jobs:
           ssh -o StrictHostKeyChecking=accept-new -i private_key ${USERNAME}@${HOSTNAME} '
           
           sudo apt update && \
-          cd home/ubuntu/ClimateNetBot/climate_bot/ && \
+          cd /home/ubuntu/ClimateNetBot/climate_bot && \
           
           git stash && \
           git checkout main && \
