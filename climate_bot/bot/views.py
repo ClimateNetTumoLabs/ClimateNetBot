@@ -20,6 +20,8 @@ import logging
 import asyncio
 from playwright.async_api import async_playwright
 import traceback
+from datetime import datetime, timezone
+import pytz
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -286,6 +288,25 @@ def get_comparison_formatted_data(devices, measurements):
             return "status-extreme"
         return ""
  
+    def get_timestamp_class(timestamp_str):
+        if not timestamp_str or timestamp_str == "N/A":
+            return "timestamp-outdated"
+
+        try:   
+            now = datetime.now(timezone.utc)
+            timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+            timestamp = timestamp.replace(tzinfo = timezone.utc)
+
+            time_diff = now- timestamp
+            time_diff_min = time_diff.total_seconds()/60
+
+            if time_diff_min <= 15:
+                return "timestamp-uptodate"
+            else:
+                return "timestamp-outdated"
+        except Exception as e:
+            logger.warning(f"Error handling {timestamp_str} data (outdated or not): {e}")
+            return "timestamp-outdated"
 
     template_path = os.path.join(settings.BASE_DIR,'bot', 'templates','bot', 'comparison.html')
     logger.debug(f"Template path: {os.path.abspath(template_path)}, Exists: {os.path.exists(template_path)}")
@@ -316,7 +337,11 @@ def get_comparison_formatted_data(devices, measurements):
         device_name = device['name']
         issues = '<div class="warning">⚠️ Device has technical issues</div>' if device_name in devices_with_issues else ""
         device_headers += f'<th class="device-header">🔹{device_name}</th>\n'
-        timestamp_row += f'<td class="device-cell"><div class="timestamp">{safe_value(measurement.get("timestamp"))}</div></td>\n'
+        
+        timestamp_value = safe_value(measurement.get('timestamp'))
+        timestamp_class = get_timestamp_class(timestamp_value)
+        cell_class = f"timestamp=cell-{timestamp_class.replace('timestamp-', '')}"
+        timestamp_row += f'<td class="device-cell {cell_class}"><div class="timestamp {timestamp_class}">{timestamp_value}</div></td>\n'
         uv_row += f'<td class="device-cell"><div class="value {get_status_class(get_uv_desc(measurement.get("uv")))}">{safe_value(measurement.get("uv"))}</div><div class="description">{get_uv_desc(measurement.get("uv"))}</div></td>\n'
         lux_row += f'<td class="device-cell"><div class="value">{safe_value(measurement.get("lux"))} lux</div></td>\n'
         temperature_row += f'<td class="device-cell"><div class="value">{safe_value(measurement.get("temperature"), is_round=True)}°C</div></td>\n'
