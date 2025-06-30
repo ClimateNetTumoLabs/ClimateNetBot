@@ -60,7 +60,7 @@ locations, device_ids = get_device_data()
 user_context = {}
 
 
-devices_with_issues = ["Berd", "Ashotsk", "Gavar", "Artsvaberd", "Chambarak", "Areni", "Amasia"]
+devices_with_issues = ["Berd", "Ashotsk", "Artsvaberd", "Areni", "Amasia", "Spitak", "Shnogh", "Azatamut"]
 
 
 def fetch_latest_measurement(device_id):
