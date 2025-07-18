@@ -639,8 +639,8 @@ def _clear_comparison_context(chat_id):
 def _prompt_for_more_devices(chat_id, selected_device, device_count):
     markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
     markup.add(types.KeyboardButton('/One_More ➕'))
-    markup.add(types.KeyboardButton('/Start_Comparing ✅'))
     markup.add(types.KeyboardButton('/Cancel_Compare ❌'))
+    markup.add(types.KeyboardButton('/Start_Comparing ✅'))
 
     bot.send_message(
         chat_id,
