@@ -40,7 +40,7 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 
 def get_device_data():
-    url = "https://climatenet.am/device_inner/list/"
+    url = "https://dev.climatenet.am/device_inner/list/"
     logger.debug(f"Fetching device data from {url}")
     try:
         response = requests.get(url)
@@ -48,21 +48,22 @@ def get_device_data():
         devices = response.json()
         locations = defaultdict(list)
         device_ids = {}
+        device_issues = {}
         for device in devices:
             device_ids[device["name"]] = device["generated_id"]
             locations[device.get("parent_name", "Unknown")].append(device["name"])
+            issues = device.get("issues", [])
+            if issues:
+                device_issues[device["name"]] = issues
         logger.debug(f"Loaded {len(device_ids)} devices")
-        return locations, device_ids
+        return locations, device_ids, device_issues
     except requests.RequestException as e:
         logger.error(f"Error fetching device data: {e}")
-        return {}, {}
+        return {}, {}, {}
 
-
-locations, device_ids = get_device_data()
+locations, device_ids, device_issues = get_device_data()
 user_context = {}
-
-
-devices_with_issues = ["Berd", "Ashotsk", "Artsvaberd", "Areni", "Amasia", "Spitak", "Shnogh", "Azatamut"]
+devices_with_issues = set(device_issues.keys())
 
 
 def fetch_latest_measurement(device_id):
@@ -220,6 +221,67 @@ def pm_level(pm, pollutant):
             return levels[i]
     return levels[-1]
 
+def format_device_issues(device_name, html_format=False):
+    if device_name not in device_issues:
+        return ""
+    issues = device_issues[device_name]
+    if not issues:
+        return ""
+
+    if html_format:
+        issue_text = ""
+        for issue in issues:
+            issue_name = issue.get('name', 'Unknown Issue')
+            issue_text += f"<p class=\"warning\">⚠️ {issue_name}</p>\n"
+    else:    
+        issue_text = "<b>𝗧𝗲𝗰𝗵𝗻𝗶𝗰𝗮𝗹 𝗜𝘀𝘀𝘂𝗲𝘀</b>\n"
+        for issue in issues:
+            issue_name = issue.get('name', 'Unknown Issue')
+            issue_text +=f"<b>⚠️ {issue_name}</b>\n"
+    return issue_text
+
+
+def uv_index(uv, with_emoji = True):
+    if uv is None:
+        return "N/A"
+    if uv < 3:
+        label, emoji = "Low","🟢"
+    elif 3 <= uv <= 5:
+        label, emoji = "Moderate","🟡"
+    elif 6 <= uv <= 7:
+        label, empoji = "High","🟠"
+    elif 8 <= uv <= 10:
+        label, emoji = "Very High","🔴"
+    else:
+        label, emoji = "Extreme","🟣"
+
+    return f"{label} {emoji}" if with_emoji else label
+
+
+def pm_level(pm, pollutant, with_emoji = True):
+    if pm is None:
+        return "N/A"
+    thresholds = {
+        "PM1.0": [50, 100, 150, 200, 300],
+        "PM2.5": [12, 36, 56, 151, 251],
+        "PM10": [54, 154, 254, 354, 504]
+    }
+    levels = [
+        ("Good", "🟢"),
+        ("Moderate", "🟡"),
+        ("Unhealthy for Sensitive Groups", "🟠"),
+        ("Unhealthy", "🟠"),
+        ("Very Unhealthy", "🔴"),
+        ("Hazardous", "🔴")
+    ]
+    thresholds = thresholds.get(pollutant, [])
+    for i, limit in enumerate(thresholds):
+        if pm <= limit:
+            label, emoji = levels[i]
+            return f"{label} {emoji}" if with_emoji else label
+    label, emoji = levels[-1]
+    return f"{label} {emoji}" if with_emoji else label
+
 
 def get_formatted_data(measurement, selected_device):
     logger.debug(f"Formatting data for device: {selected_device}")
@@ -232,12 +294,10 @@ def get_formatted_data(measurement, selected_device):
     pm1_description = pm_level(measurement.get('pm1'), 'PM1.0')
     pm2_5_description = pm_level(measurement.get('pm2_5'), 'PM2.5')
     pm10_description = pm_level(measurement.get('pm10'), 'PM10')
-    
-    technical_issues_message = ""
-    if selected_device in devices_with_issues:
-        technical_issues_message = "⚠️ <b>Note:</b> This device is currently experiencing technical issues.\n"
-    
- 
+
+    technical_issues_message = format_device_issues(selected_device)
+
+
     return (
         f"<b>𝗟𝗮𝘁𝗲𝘀𝘁 𝗠𝗲𝗮𝘀𝘂𝗿𝗲𝗺𝗲𝗻𝘁</b>\n"
         f"🔹 <b>Location:</b> <b>{selected_device}</b>\n"
@@ -267,13 +327,11 @@ def get_comparison_formatted_data(devices, measurements):
             return "N/A"
         return f"{round(value)}" if is_round else f"{value}"
 
-
     def get_uv_desc(uv):
-        return uv_index(uv) if uv is not None else "N/A"
+        return uv_index(uv, with_emoji=False) if uv is not None else "N/A"
 
     def get_pm_desc(pm, pollutant):
-        return pm_level(pm, pollutant) if pm is not None else "N/A"
-
+        return pm_level(pm, pollutant, with_emoji=False) if pm is not None else "N/A"
 
     def get_status_class(description):
         if "Very High" in description or "Extreme" in description or "Hazardous" in description:
@@ -284,22 +342,17 @@ def get_comparison_formatted_data(devices, measurements):
             return "status-moderate"
         elif "Good" in description or "Low" in description:
             return "status-good"
-        elif "Extreme":
-            return "status-extreme"
         return ""
- 
+
     def get_timestamp_class(timestamp_str):
         if not timestamp_str or timestamp_str == "N/A":
             return "timestamp-outdated"
-
-        try:   
+        try:
             now = datetime.now(timezone.utc)
             timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-            timestamp = timestamp.replace(tzinfo = timezone.utc)
-
-            time_diff = now- timestamp
-            time_diff_min = time_diff.total_seconds()/60
-
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+            time_diff = now - timestamp
+            time_diff_min = time_diff.total_seconds() / 60
             if time_diff_min <= 15:
                 return "timestamp-uptodate"
             else:
@@ -308,7 +361,7 @@ def get_comparison_formatted_data(devices, measurements):
             logger.warning(f"Error handling {timestamp_str} data (outdated or not): {e}")
             return "timestamp-outdated"
 
-    template_path = os.path.join(settings.BASE_DIR,'bot', 'templates','bot', 'comparison.html')
+    template_path = os.path.join(settings.BASE_DIR, 'bot', 'templates', 'bot', 'comparison.html')
     logger.debug(f"Template path: {os.path.abspath(template_path)}, Exists: {os.path.exists(template_path)}")
     try:
         with open(template_path, 'r', encoding='utf-8') as f:
@@ -331,16 +384,27 @@ def get_comparison_formatted_data(devices, measurements):
     wind_speed_row = ""
     rain_row = ""
     wind_direction_row = ""
+    technical_issues_row = ""
 
+    has_issues = False
+    issues_cells = ""
+    for device in devices:
+        device_name = device['name']
+        issues = format_device_issues(device_name, html_format=True)
+        if issues:
+            has_issues = True
+        issues_cells += f'<td class="device-cell"><div>{issues if issues else ""}</div></td>\n'
+
+    if has_issues:
+        technical_issues_row = f'<tr><td class="metric-cell">⚠️ Technical Problems</td>{issues_cells}</tr>'
 
     for idx, (device, measurement) in enumerate(zip(devices, measurements)):
         device_name = device['name']
-        issues = '<div class="warning">⚠️ Device has technical issues</div>' if device_name in devices_with_issues else ""
         device_headers += f'<th class="device-header">🔹{device_name}</th>\n'
-        
+
         timestamp_value = safe_value(measurement.get('timestamp'))
         timestamp_class = get_timestamp_class(timestamp_value)
-        cell_class = f"timestamp=cell-{timestamp_class.replace('timestamp-', '')}"
+        cell_class = f"timestamp-cell-{timestamp_class.replace('timestamp-', '')}"
         timestamp_row += f'<td class="device-cell {cell_class}"><div class="timestamp {timestamp_class}">{timestamp_value}</div></td>\n'
         uv_row += f'<td class="device-cell"><div class="value {get_status_class(get_uv_desc(measurement.get("uv")))}">{safe_value(measurement.get("uv"))}</div><div class="description">{get_uv_desc(measurement.get("uv"))}</div></td>\n'
         lux_row += f'<td class="device-cell"><div class="value">{safe_value(measurement.get("lux"))} lux</div></td>\n'
@@ -352,8 +416,7 @@ def get_comparison_formatted_data(devices, measurements):
         pm10_row += f'<td class="device-cell"><div class="value {get_status_class(get_pm_desc(measurement.get("pm10"), "PM10"))}">{safe_value(measurement.get("pm10"))} µg/m³</div><div class="description">{get_pm_desc(measurement.get("pm10"), "PM10")}</div></td>\n'
         wind_speed_row += f'<td class="device-cell"><div class="value">{safe_value(measurement.get("wind_speed"))} m/s</div></td>\n'
         rain_row += f'<td class="device-cell"><div class="value">{safe_value(measurement.get("rain"))} mm</div></td>\n'
-        wind_direction_row += f'<td class="device-cell"><div class="value">{safe_value(measurement.get("wind_direction"))}</div>{issues}</td>\n'
-
+        wind_direction_row += f'<td class="device-cell"><div class="value">{safe_value(measurement.get("wind_direction"))}</div></td>\n'
 
     template_data = {
         'device_headers': device_headers,
@@ -369,10 +432,9 @@ def get_comparison_formatted_data(devices, measurements):
         'wind_speed_row': wind_speed_row,
         'rain_row': rain_row,
         'wind_direction_row': wind_direction_row,
-
+        'technical_issues_row': technical_issues_row,
     }
-
-
+    
     logger.debug(f"Template data keys: {list(template_data.keys())}")
     try:
         html_content = template.substitute(template_data)
@@ -384,8 +446,6 @@ def get_comparison_formatted_data(devices, measurements):
     except Exception as e:
         logger.error(f"Unexpected template error: {e}")
         return None
-
-
 async def render_html_to_image(html_content, output_path):
     logger.debug(f"Rendering HTML to image at {output_path}")
     try:
@@ -436,7 +496,6 @@ def send_comparison_image(chat_id, html_content):
 
         os.remove(temp_image_path)
         logger.debug(f"Image sent and temporary file {temp_image_path} removed")
-
     except FileNotFoundError as e:
         logger.error(f"File error: {e}")
         bot.send_message(chat_id, "⚠️ CSS file missing. Please contact the administrator.")
@@ -580,8 +639,8 @@ def _clear_comparison_context(chat_id):
 def _prompt_for_more_devices(chat_id, selected_device, device_count):
     markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
     markup.add(types.KeyboardButton('/One_More ➕'))
-    markup.add(types.KeyboardButton('/Start_Comparing ✅'))
     markup.add(types.KeyboardButton('/Cancel_Compare ❌'))
+    markup.add(types.KeyboardButton('/Start_Comparing ✅'))
 
     bot.send_message(
         chat_id,
@@ -904,3 +963,6 @@ if __name__ == "__main__":
 def run_bot_view(request):
     start_bot_thread()
     return JsonResponse({'status': 'Bot is running in the background!'})
+
+
+
