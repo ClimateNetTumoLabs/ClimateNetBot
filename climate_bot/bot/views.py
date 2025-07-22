@@ -222,23 +222,28 @@ def pm_level(pm, pollutant):
     return levels[-1]
 
 def format_device_issues(device_name, html_format=False):
-    if device_name not in device_issues:
-        return ""
-    issues = device_issues[device_name]
-    if not issues:
-        return ""
-
-    if html_format:
-        issue_text = ""
-        for issue in issues:
-            issue_name = issue.get('name', 'Unknown Issue')
-            issue_text += f"<p class=\"warning\">⚠️ {issue_name}</p>\n"
-    else:    
-        issue_text = "<b>𝗧𝗲𝗰𝗵𝗻𝗶𝗰𝗮𝗹 𝗜𝘀𝘀𝘂𝗲𝘀</b>\n"
-        for issue in issues:
-            issue_name = issue.get('name', 'Unknown Issue')
-            issue_text +=f"<b>⚠️ {issue_name}</b>\n"
-    return issue_text
+    try:
+        if device_name not in device_issues:
+            return ""
+        issues = device_issues[device_name]
+        if not isinstance(issues, list):
+            logger.error(f"Invalid issues format fpr {device_name}")
+            return ""
+        if not issues:
+            return ""
+        if html_format:
+            issue_text = ""
+            for issue in issues:
+                issue_name = issue.get('name', 'Unknown Issue')
+                issue_text += f"<p class=\"warning\">⚠️ {issue_name}</p>\n"
+        else:    
+            issue_text = "<b>𝗧𝗲𝗰𝗵𝗻𝗶𝗰𝗮𝗹 𝗜𝘀𝘀𝘂𝗲𝘀</b>\n"
+            for issue in issues:
+                issue_name = issue.get('name', 'Unknown Issue') if isinstance(issue, dict) else str(issue)
+                issue_text +=f"<b>⚠️ {issue_name}</b>\n"
+        return issue_text
+    except Exception as e:
+        logger.error(f"Error in format_device_issues for {device_name}: {e}")
 
 
 def uv_index(uv, with_emoji = True):
@@ -296,7 +301,7 @@ def get_formatted_data(measurement, selected_device):
     pm10_description = pm_level(measurement.get('pm10'), 'PM10')
 
     technical_issues_message = format_device_issues(selected_device)
-
+    logger.debug(f"{technical_issues_message}")
 
     return (
         f"<b>𝗟𝗮𝘁𝗲𝘀𝘁 𝗠𝗲𝗮𝘀𝘂𝗿𝗲𝗺𝗲𝗻𝘁</b>\n"
@@ -756,10 +761,13 @@ def get_current_data(message):
         command_markup = get_command_menu(cur=selected_device)
         measurement = fetch_latest_measurement(device_id)
         if measurement:
-            formatted_data = get_formatted_data(measurement=measurement, selected_device=selected_device)
-            bot.send_message(chat_id, formatted_data, reply_markup=command_markup, parse_mode='HTML')
-            bot.send_message(chat_id, '''For the next measurement, select\t
-/Current 📍 every quarter of the hour. 🕒''')
+            try:
+                formatted_data = get_formatted_data(measurement=measurement, selected_device=selected_device)
+                bot.send_message(chat_id, formatted_data, reply_markup=command_markup, parse_mode='HTML')
+                bot.send_message(chat_id, '''For the next measurement, select\n/Current 📍 every quarter of the hour. 🕒''')
+            except Exception as e:
+                logger.error(f"Failed to send message for {selected_device}: {e}")
+                bot.send_message(chat_id, " Error sending data. Please try again later.", reply_markup = command_markup)
         else:
             logger.error(f"Failed to fetch measurement for {selected_device}")
             bot.send_message(chat_id, "⚠️ Error retrieving data. Please try again later.", reply_markup=command_markup)
