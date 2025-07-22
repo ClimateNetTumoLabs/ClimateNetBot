@@ -254,7 +254,7 @@ def uv_index(uv, with_emoji = True):
     elif 3 <= uv <= 5:
         label, emoji = "Moderate","🟡"
     elif 6 <= uv <= 7:
-        label, empoji = "High","🟠"
+        label, emoji = "High","🟠"
     elif 8 <= uv <= 10:
         label, emoji = "Very High","🔴"
     else:
@@ -767,7 +767,7 @@ def get_current_data(message):
                 bot.send_message(chat_id, '''For the next measurement, select\n/Current 📍 every quarter of the hour. 🕒''')
             except Exception as e:
                 logger.error(f"Failed to send message for {selected_device}: {e}")
-                bot.send_message(chat_id, " Error sending data. Please try again later.", reply_markup = command_markup)
+                bot.send_message(chat_id, "⚠️ Error sending data. Please try again later.", reply_markup = command_markup)
         else:
             logger.error(f"Failed to fetch measurement for {selected_device}")
             bot.send_message(chat_id, "⚠️ Error retrieving data. Please try again later.", reply_markup=command_markup)
