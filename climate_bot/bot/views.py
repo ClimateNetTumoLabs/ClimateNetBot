@@ -21,6 +21,7 @@ import asyncio
 from playwright.async_api import async_playwright
 import traceback
 from datetime import datetime, timezone
+from bot.device_manager import DeviceManager
 import pytz
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -38,33 +39,15 @@ if not TELEGRAM_BOT_TOKEN:
 
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
+device_manager = DeviceManager(
+    api_url="https://climatenet.am/device_inner/list/",  
+    refresh_interval= 86400,  #day  
+    max_retries=3
+)
 
-def get_device_data():
-    url = "https://dev.climatenet.am/device_inner/list/"
-    logger.debug(f"Fetching device data from {url}")
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        devices = response.json()
-        locations = defaultdict(list)
-        device_ids = {}
-        device_issues = {}
-        for device in devices:
-            device_ids[device["name"]] = device["generated_id"]
-            locations[device.get("parent_name", "Unknown")].append(device["name"])
-            issues = device.get("issues", [])
-            if issues:
-                device_issues[device["name"]] = issues
-        logger.debug(f"Loaded {len(device_ids)} devices")
-        return locations, device_ids, device_issues
-    except requests.RequestException as e:
-        logger.error(f"Error fetching device data: {e}")
-        return {}, {}, {}
+device_manager.start_auto_update()
 
-locations, device_ids, device_issues = get_device_data()
 user_context = {}
-devices_with_issues = set(device_issues.keys())
-
 
 def fetch_latest_measurement(device_id):
     url = f"https://climatenet.am/device_inner/{device_id}/latest/"
@@ -125,6 +108,7 @@ def start_bot_thread():
 
 def send_location_selection(chat_id):
     location_markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    locations = device_manager.get_locations()
     for country in locations.keys():
         location_markup.add(types.KeyboardButton(country))
     bot.send_message(chat_id, 'Please choose a Region: 📍', reply_markup=location_markup)
@@ -164,7 +148,7 @@ def start_compare(message):
         bot.send_message(chat_id, f"Error starting comparison: {e}")
 
 
-@bot.message_handler(func=lambda message: message.text in locations.keys())
+@bot.message_handler(func=lambda message: message.text in device_manager.get_locations().keys())
 @log_command_decorator
 def handle_country_selection(message):
     selected_country = message.text
@@ -178,6 +162,7 @@ def handle_country_selection(message):
         return
     user_context[chat_id] = {'selected_country': selected_country}
     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    locations = device_manager.get_locations()
     for device in locations[selected_country]:
         markup.add(types.KeyboardButton(device))
     markup.add(types.KeyboardButton('/Change_location'))
@@ -223,6 +208,7 @@ def pm_level(pm, pollutant):
 
 def format_device_issues(device_name, html_format=False):
     try:
+        device_issues = device_manager.get_device_issues()
         if device_name not in device_issues:
             return ""
         issues = device_issues[device_name]
@@ -510,7 +496,7 @@ def send_comparison_image(chat_id, html_content):
         bot.send_message(chat_id, "⚠️ Error generating comparison image. Please try again.")
 
 
-@bot.message_handler(func=lambda message: message.text in [device for devices in locations.values() for device in devices])
+@bot.message_handler(func=lambda message: message.text in [device for devices in device_manager.get_locations().values() for device in devices]) 
 @log_command_decorator
 def handle_device_selection(message):
     selected_device = message.text
@@ -519,7 +505,7 @@ def handle_device_selection(message):
 
     _initialize_user_context(chat_id)
 
-    device_id = device_ids.get(selected_device)
+    device_id = device_manager.get_device_id(selected_device)
     if not device_id:
         _handle_device_not_found(chat_id, selected_device)
         return
@@ -830,6 +816,7 @@ def map(message):
 
 def send_location_selection_for_compare(chat_id, device_number):
     location_markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    locations = device_manager.get_locations()
     if not locations:
         logger.error("No locations available")
         bot.send_message(chat_id, "⚠️ No locations available. Please try again later.")
@@ -849,6 +836,7 @@ def send_location_selection_for_compare(chat_id, device_number):
 
 def send_device_selection_for_compare(chat_id, selected_country, device_number):
     markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    locations = device_manager.get_locations()
     for device in locations[selected_country]:
         markup.add(types.KeyboardButton(device))
     markup.add(types.KeyboardButton('/Cancel_Compare ❌'))
