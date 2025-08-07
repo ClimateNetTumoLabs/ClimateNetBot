@@ -4,10 +4,9 @@ import requests
 import telebot
 from telebot import types
 import threading
-import time
 import os
 from dotenv import load_dotenv
-from bot.models import Device
+from bot.models import Device, TelegramSchedule
 from collections import defaultdict
 import django
 from django.conf import settings
@@ -20,9 +19,17 @@ import logging
 import asyncio
 from playwright.async_api import async_playwright
 import traceback
-from datetime import datetime, timezone
 from bot.device_manager import DeviceManager
 import pytz
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
+from apscheduler.executors.pool import ThreadPoolExecutor
+import re
+
+import time as time_module
+from datetime import datetime, time, timedelta
+
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -47,7 +54,63 @@ device_manager = DeviceManager(
 
 device_manager.start_auto_update()
 
+
+database_url = f"sqlite:///{os.path.join(settings.BASE_DIR, 'scheduler.db')}"
+jobstores = {
+    'default': SQLAlchemyJobStore(url=database_url)
+}
+executors = {
+    'default': ThreadPoolExecutor(20),
+}
+job_defaults = {
+    'coalesce': False,
+    'max_instances': 3
+}
+
+scheduler = BackgroundScheduler(
+    jobstores=jobstores, 
+    executors=executors, 
+    job_defaults=job_defaults
+)
+scheduler.start()
+
+YEREVAN_TZ = pytz.timezone('Asia/Yerevan')
+
 user_context = {}
+
+def get_user_schedules(chat_id):
+    return TelegramSchedule.objects.filter(chat_id=chat_id, is_active=True)
+
+def create_schedule_record(chat_id, device_name, device_id, frequency, custom_times=None, job_ids=None):
+    schedule, created = TelegramSchedule.objects.get_or_create(
+        chat_id=chat_id,
+        device_name=device_name,
+        defaults={
+            'device_id': device_id,
+            'frequency': frequency,
+            'custom_times': custom_times,
+            'job_ids': job_ids or [],
+            'is_active': True
+        }
+    )
+    if not created:
+        schedule.device_id = device_id
+        schedule.frequency = frequency
+        schedule.custom_times = custom_times
+        schedule.job_ids = job_ids or []
+        schedule.is_active = True
+        schedule.save()
+    return schedule
+
+def delete_schedule_record(chat_id, device_name):
+    try:
+        schedule = TelegramSchedule.objects.get(chat_id=chat_id, device_name=device_name, is_active=True)
+        schedule.is_active = False
+        schedule.save()
+        return schedule
+    except TelegramSchedule.DoesNotExist:
+        return None
+
 
 def fetch_latest_measurement(device_id):
     url = f"https://climatenet.am/device_inner/{device_id}/latest/"
@@ -90,16 +153,19 @@ def fetch_latest_measurement(device_id):
 def start_bot():
     logger.info("Starting bot polling")
     bot.polling(none_stop=True)
-
+    logger.info('Bot polling stopped')
 
 def run_bot():
     while True:
         try:
             start_bot()
+        except KeyboardInterrupt:
+            logger.info("Bot stopped by user")
+            break
         except Exception as e:
             logger.error(f"Bot polling error: {e}")
-            time.sleep(15)
-
+            logger.info("Restarting bot in 15 seconds...")
+            time_module.sleep(15)
 
 def start_bot_thread():
     bot_thread = threading.Thread(target=run_bot)
@@ -107,12 +173,30 @@ def start_bot_thread():
 
 
 def send_location_selection(chat_id):
-    location_markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    location_markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     locations = device_manager.get_locations()
     for country in locations.keys():
         location_markup.add(types.KeyboardButton(country))
     bot.send_message(chat_id, 'Please choose a Region: 📍', reply_markup=location_markup)
 
+def has_power_internet_issue(device_name):
+    try:
+        device_issues = device_manager.get_device_issues()
+        if device_name not in device_issues:
+            return False
+        
+        issues = device_issues[device_name]
+        if not isinstance(issues, list):
+            return False
+        
+        for issue in issues:
+            issue_name = issue.get('name', '') if isinstance(issue, dict) else str(issue)
+            if 'Power' in issue_name or 'Internet' in issue_name:
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"Error checking device issues for {device_name}: {e}")
+        return False
 
 @bot.message_handler(commands=['start'])
 @log_command_decorator
@@ -154,19 +238,43 @@ def handle_country_selection(message):
     selected_country = message.text
     chat_id = message.chat.id
     logger.debug(f"Country selected: {selected_country} for chat_id: {chat_id}")
+    
+    if (chat_id in user_context and 
+        user_context[chat_id].get('schedule_state') == 'selecting_location'):
+        logger.debug(f'Schedule country: {selected_country} chat_id: {chat_id}')
+        
+        user_context[chat_id]['schedule_country'] = selected_country
+        user_context[chat_id]['schedule_state'] = 'selecting_device'
+
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        locations = device_manager.get_locations()
+        for device in locations[selected_country]:
+            markup.add(types.KeyboardButton(device))
+        markup.add(types.KeyboardButton('/Cancel_Schedule ❌'))
+        
+        bot.send_message(
+            chat_id, 
+            f'📅 Please choose a Location for Schedule: ✅', 
+            reply_markup=markup
+        )
+        return
+    
     if chat_id in user_context and user_context[chat_id].get('compare_mode'):
         compare_devices = user_context[chat_id].get('compare_devices', [])
         device_number = len(compare_devices) + 1
         user_context[chat_id][f'compare_country_{device_number}'] = selected_country
         send_device_selection_for_compare(chat_id, selected_country, device_number)
         return
+    
     user_context[chat_id] = {'selected_country': selected_country}
-    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     locations = device_manager.get_locations()
     for device in locations[selected_country]:
         markup.add(types.KeyboardButton(device))
     markup.add(types.KeyboardButton('/Change_location'))
     bot.send_message(chat_id, 'Please choose a Location: ✅', reply_markup=markup)
+
+
 
 
 def uv_index(uv):
@@ -339,11 +447,16 @@ def get_comparison_formatted_data(devices, measurements):
         if not timestamp_str or timestamp_str == "N/A":
             return "timestamp-outdated"
         try:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(YEREVAN_TZ)
+            
             timestamp = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
-            timestamp = timestamp.replace(tzinfo=timezone.utc)
-            time_diff = now - timestamp
+            timestamp = timestamp.replace(tzinfo=pytz.UTC)  
+            
+            timestamp_yerevan = timestamp.astimezone(YEREVAN_TZ)
+            
+            time_diff = now - timestamp_yerevan
             time_diff_min = time_diff.total_seconds() / 60
+            
             if time_diff_min <= 15:
                 return "timestamp-uptodate"
             else:
@@ -354,11 +467,19 @@ def get_comparison_formatted_data(devices, measurements):
 
     template_path = os.path.join(settings.BASE_DIR, 'bot', 'templates', 'bot', 'comparison.html')
     logger.debug(f"Template path: {os.path.abspath(template_path)}, Exists: {os.path.exists(template_path)}")
+    
+    if not os.path.exists(template_path):
+        logger.error(f"Template file not found: {template_path}")
+        return None
+    
     try:
         with open(template_path, 'r', encoding='utf-8') as f:
             template = Template(f.read())
     except FileNotFoundError as e:
         logger.error(f"Error: {template_path} not found: {e}")
+        return None
+    except Exception as e:
+        logger.error(f"Error reading template: {e}")
         return None
 
     template_data = {}
@@ -437,6 +558,7 @@ def get_comparison_formatted_data(devices, measurements):
     except Exception as e:
         logger.error(f"Unexpected template error: {e}")
         return None
+    
 async def render_html_to_image(html_content, output_path):
     logger.debug(f"Rendering HTML to image at {output_path}")
     try:
@@ -510,12 +632,17 @@ def handle_device_selection(message):
         _handle_device_not_found(chat_id, selected_device)
         return
 
-    if user_context[chat_id].get('compare_mode'):
+    if (chat_id in user_context and 
+        user_context[chat_id].get('schedule_state') == 'selecting_device'):
+        handle_schedule_device_selection_logic(chat_id, selected_device, device_id)
+        return
+
+    elif user_context[chat_id].get('compare_mode'):
         _handle_comparison_mode(chat_id, selected_device, device_id, message.from_user.id)
     else:
         _handle_normal_mode(chat_id, selected_device, device_id, message.from_user.id)
-
-
+        
+        
 def _initialize_user_context(chat_id):
     if chat_id not in user_context:
         user_context[chat_id] = {}
@@ -527,6 +654,19 @@ def _handle_device_not_found(chat_id, selected_device):
 
 
 def _handle_normal_mode(chat_id, selected_device, device_id, user_id):
+    if has_power_internet_issue(selected_device):
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        markup.add(types.KeyboardButton('/Back_to_Menu 🔙'))
+        
+        bot.send_message(
+            chat_id,
+            "⚠️ <b>No Recent Data Found</b>\n\n"
+            "This device hasn't reported any measurements recently. Please check back later.",
+            reply_markup=markup,
+            parse_mode='HTML'
+        )
+        return
+    
     user_context[chat_id]['selected_device'] = selected_device
     user_context[chat_id]['device_id'] = device_id
 
@@ -628,7 +768,7 @@ def _clear_comparison_context(chat_id):
 
 
 def _prompt_for_more_devices(chat_id, selected_device, device_count):
-    markup = types.ReplyKeyboardMarkup(row_width=3, resize_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     markup.add(types.KeyboardButton('/One_More ➕'))
     markup.add(types.KeyboardButton('/Cancel_Compare ❌'))
     markup.add(types.KeyboardButton('/Start_Comparing ✅'))
@@ -728,7 +868,8 @@ def get_command_menu(cur=None):
         types.KeyboardButton('/Website 🌐'),
         types.KeyboardButton('/Map 🗺️'),
         # types.KeyboardButton('/Share_location 🌍'),
-        types.KeyboardButton('/Compare 🆚')
+        types.KeyboardButton('/Compare  🆚'),
+        types.KeyboardButton('/Schedule ⏰')
     )
     return command_markup
 
@@ -770,7 +911,8 @@ def help(message):
 <b>/Help ❓:</b> Show available commands.\n
 <b>/Website 🌐:</b> Visit our website for more information.\n
 <b>/Map 🗺️:</b> View the locations of all devices on a map.\n
-<b>/Compare🆚:</b> Compare data from multiple devices side by side.\n
+<b>/Compare 🆚:</b> Compare data from multiple devices side by side.\n
+<b>/Schedule ⏰:</b> Set up automatic data update schedules.\n
 ''', parse_mode='HTML')
 
 
@@ -815,7 +957,7 @@ def map(message):
 
 
 def send_location_selection_for_compare(chat_id, device_number):
-    location_markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    location_markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     locations = device_manager.get_locations()
     if not locations:
         logger.error("No locations available")
@@ -835,7 +977,7 @@ def send_location_selection_for_compare(chat_id, device_number):
 
 
 def send_device_selection_for_compare(chat_id, selected_country, device_number):
-    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
     locations = device_manager.get_locations()
     for device in locations[selected_country]:
         markup.add(types.KeyboardButton(device))
@@ -863,6 +1005,930 @@ def cancel_compare(message):
         "Comparison cancelled. Back to the main menu.",
         reply_markup=command_markup
     )
+
+
+@bot.message_handler(commands=['Schedule'])
+@log_command_decorator
+def schedule_menu(message):
+    chat_id = message.chat.id
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    markup.add(
+        types.KeyboardButton('/Add_Schedule ➕'),
+        types.KeyboardButton('/My_Schedules 📋'),
+        types.KeyboardButton('/Schedule_Help ❓'),
+        types.KeyboardButton('/Back_to_Menu 🔙')
+    )
+    bot.send_message(
+        chat_id,
+        "📅 <b>Schedule Menu</b>\n\n"
+        "🔹 <b>Add Schedule:</b> Create new scheduled data retrieval\n"
+        "🔹 <b>My Schedules:</b> View and manage your current schedules\n"
+        "🔹 <b>Schedule Help:</b> Learn how scheduling works",
+        reply_markup=markup,
+        parse_mode='HTML'
+    )
+    
+
+@bot.message_handler(commands=['Schedule_Help'])
+@log_command_decorator 
+def schedule_help(message):
+    chat_id = message.chat.id
+    help_text = """
+🗓️ <b>Schedule Help</b>
+
+<b>Time Options:</b>
+🕒 <b>15 minutes</b> – Data every 15 min (at HH:00, HH:15, HH:30, HH:45)  
+🕐 <b>Hourly</b> – Data every hour (at HH:00)  
+🕐 <b>Custom</b> – Set any time (HH:MM)
+
+<b>Manage Your Schedule:</b>
+• View: /My_Schedules  
+• Delete one or all: /Delete_Schedule or /Delete_All_Schedules  
+• Limit: Max 5 schedules per user
+"""
+    bot.send_message(chat_id, help_text, parse_mode='HTML')
+
+@bot.message_handler(commands=['Add_Schedule'])
+@log_command_decorator
+def add_schedule(message):
+    chat_id = message.chat.id
+    
+    current_schedules = get_user_schedules(chat_id)
+    if current_schedules.count() >= 5:
+        bot.send_message(
+            chat_id,
+            "⚠️ Maximum 5 schedules allowed. Please delete some schedules first.",
+            reply_markup=get_schedule_menu_markup()
+        )
+        return
+
+    if chat_id not in user_context:
+        user_context[chat_id] = {}
+    
+    user_context[chat_id]['schedule_state'] = 'selecting_location'
+    user_context[chat_id]['schedule_mode'] = True 
+    
+    send_location_selection_for_schedule(chat_id)
+    
+def send_location_selection_for_schedule(chat_id):
+    location_markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    locations = device_manager.get_locations()
+    for country in locations.keys():
+        location_markup.add(types.KeyboardButton(country))
+    location_markup.add(types.KeyboardButton('/Cancel_Schedule ❌'))
+    
+    bot.send_message(
+        chat_id,
+        '📅 <b>Schedule Setup</b>\n\nPlease choose a Region for your scheduled updates: 📍',
+        reply_markup=location_markup,
+        parse_mode='HTML'
+    )
+
+
+
+@bot.message_handler(func=lambda message: (
+    message.text in device_manager.get_locations().keys() and
+    message.chat.id in user_context and
+    user_context[message.chat.id].get('schedule_state') == 'selecting_location'))
+@log_command_decorator
+def handle_schedule_country_selection(message):
+    selected_country = message.text
+    chat_id = message.chat.id
+    logger.debug(f'Schedule country: {selected_country} chat_id: {chat_id}')
+    
+    user_context[chat_id]['schedule_country'] = selected_country
+    user_context[chat_id]['schedule_state'] = 'selecting_device'
+
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    locations = device_manager.get_locations()
+    for device in locations[selected_country]:
+        markup.add(types.KeyboardButton(device))
+    markup.add(types.KeyboardButton('/Cancel_Schedule ❌'))
+    
+    bot.send_message(
+        chat_id, 
+        'Please choose a Location: ✅', 
+        reply_markup=markup
+    )
+
+
+def handle_schedule_device_selection_logic(chat_id, selected_device, device_id):
+    if has_power_internet_issue(selected_device):
+        schedule_keys = ['schedule_state', 'schedule_frequency', 'schedule_device',
+                        'schedule_device_id', 'schedule_country']
+        for key in schedule_keys:
+            user_context[chat_id].pop(key, None)
+        
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        markup.add(
+            types.KeyboardButton('/Add_Schedule ➕'),
+            types.KeyboardButton('/Back_to_Menu 🔙')
+        )
+        
+        bot.send_message(
+            chat_id,
+            "⚠️ <b>No Recent Data Found</b>\n\n"
+            "This device hasn't reported any measurements recently. Please check back later.\n\n"
+            "Schedule cannot be created for this device at the moment.",
+            reply_markup=markup,
+            parse_mode='HTML'
+        )
+        return
+
+    user_context[chat_id]['schedule_device'] = selected_device
+    user_context[chat_id]['schedule_device_id'] = device_id
+    user_context[chat_id]['schedule_state'] = 'awaiting_frequency'
+    
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    markup.add(
+        types.KeyboardButton('Every 15 minutes ⏰'),
+        types.KeyboardButton('Every hour 🕐'),
+        types.KeyboardButton('Custom times ⚙️'),
+        types.KeyboardButton('/Cancel_Schedule ❌')
+    )
+    
+    bot.send_message(
+        chat_id,
+        f"How often would you like to receive data?",
+        reply_markup=markup,
+        parse_mode='HTML'
+    )
+
+@bot.message_handler(commands=['Edit'])
+@log_command_decorator
+def edit_schedule_frequency(message):
+    chat_id = message.chat.id
+    try:
+        if 'editing_device' not in user_context.get(chat_id, {}):
+            bot.send_message(chat_id, "⚠️ No device selected for editing.")
+            return
+    
+        existing_schedule = user_context[chat_id]['existing_schedule']
+        for job_id in existing_schedule.get('job_ids', []):
+            try:
+                scheduler.remove_job(job_id)
+            except Exception as e:
+                logger.warning(f"Error removing job {job_id}: {e}")
+    
+        user_schedules[chat_id] = [
+            s for s in user_schedules[chat_id] 
+            if s['device'] != existing_schedule['device']
+        ]
+    
+        user_context[chat_id]['schedule_device'] = existing_schedule['device']
+        user_context[chat_id]['schedule_device_id'] = existing_schedule['device_id']
+        user_context[chat_id]['schedule_state'] = 'awaiting_frequency'
+    
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        markup.add(
+            types.KeyboardButton('Every 30 minutes ⏰'),
+            types.KeyboardButton('Every hour 🕐'),
+            types.KeyboardButton('Custom times ⚙️'),
+            types.KeyboardButton('/Cancel_Schedule ❌')
+        )
+    
+        bot.send_message(
+            chat_id,
+            f"✏️ <b>Editing Schedule for {existing_schedule['device']}</b>\n\n"
+            f"The previous schedule has been removed.\n"
+            f"Please select a new frequency:",
+            reply_markup=markup,
+            parse_mode='HTML'
+        )
+    except Exception as e:
+        logger.error(f"Error in edit_schedule_frequency: {e}")
+        bot.send_message(
+            chat_id,
+            "⚠️ An error occurred while editing the schedule. Please try again.",
+            reply_markup=get_schedule_menu_markup()
+        )
+        for key in ['editing_device', 'existing_schedule']:
+            user_context[chat_id].pop(key, None)
+
+
+@bot.message_handler(func=lambda message: (
+    message.text in ['Every 15 minutes ⏰', 'Every hour 🕐', 'Custom times ⚙️'] and
+    message.chat.id in user_context and 
+    user_context[message.chat.id].get('schedule_state') == 'awaiting_frequency'
+))
+@log_command_decorator
+def handle_schedule_frequency(message):
+    chat_id = message.chat.id
+    frequency = message.text
+    user_context[chat_id]['schedule_frequency'] = frequency
+    
+    logger.debug(f"Frequency selected: {frequency} for chat_id: {chat_id}")
+    
+    if frequency == 'Custom times ⚙️':
+        user_context[chat_id]['schedule_state'] = 'awaiting_custom_time'
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        markup.add(types.KeyboardButton('/Cancel_Schedule ❌'))
+        
+        bot.send_message(
+            chat_id,
+            "🕐 <b>Custom Schedule Times</b>\n\n"
+            "Please enter specific times when you want to receive data.\n\n"
+            "<b>Format:</b> HH:MM (24-hour format)\n"
+            "<b>Multiple times:</b> separate with commas\n\n"
+            "<b>Examples:</b>\n"
+            "• Single time: <code>09:00</code>\n"
+            "• Multiple times: <code>09:14, 18:37</code>\n"
+            "• Maximum 8 times per schedule",
+            reply_markup=markup,
+            parse_mode='HTML'
+        )
+    else:
+        create_schedule(chat_id, frequency)
+
+@bot.message_handler(func=lambda message: (
+    message.chat.id in user_context and 
+    user_context[message.chat.id].get('schedule_state') == 'awaiting_custom_time' and
+    not message.text.startswith('/') and
+    message.content_type == 'text'
+))
+@log_command_decorator
+def handle_custom_time(message):
+    chat_id = message.chat.id
+    time_input = message.text.strip()
+    
+    logger.debug(f"Processing custom time input: '{time_input}' for chat_id: {chat_id}")
+    
+    time_pattern = r'^\s*(\d{1,2}):(\d{2})\s*(?:,\s*(\d{1,2}):(\d{2})\s*)*$'
+    
+    if not re.match(time_pattern, time_input):
+        logger.warning(f"Invalid time format for chat_id: {chat_id}, input: '{time_input}'")
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        markup.add(types.KeyboardButton('/Cancel_Schedule ❌'))
+        
+        bot.send_message(
+            chat_id,
+            "⚠️ <b>Invalid Time Format</b>\n\n"
+            "Please use HH:MM format with commas between multiple times.\n\n"
+            "<b>Valid Examples:</b>\n"
+            "• <code>09:00</code>\n"
+            "• <code>12:30</code>\n"
+            "• <code>09:00, 12:30, 18:45</code>\n\n"
+            "Try again:",
+            reply_markup=markup,
+            parse_mode='HTML'
+        )
+        return
+    
+    times = [t.strip() for t in time_input.split(',')]
+    validated_times = []
+    
+    for time_str in times:
+        try:
+            if ':' not in time_str:
+                raise ValueError(f"Missing colon in time: {time_str}")
+            
+            hour_str, minute_str = time_str.split(':')
+            hour = int(hour_str)
+            minute = int(minute_str)
+            
+            if not (0 <= hour <= 23):
+                raise ValueError(f"Hour {hour} out of range (0-23)")
+            if not (0 <= minute <= 59):
+                raise ValueError(f"Minute {minute} out of range (0-59)")
+            
+            validated_times.append(f"{hour:02d}:{minute:02d}")
+            logger.debug(f"Validated time: {time_str} -> {hour:02d}:{minute:02d}")
+            
+        except (ValueError, IndexError) as e:
+            logger.warning(f"Invalid time for chat_id: {chat_id}: '{time_str}', error: {e}")
+            markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+            markup.add(types.KeyboardButton('/Cancel_Schedule ❌'))
+            bot.send_message(
+                chat_id,
+                f"⚠️ Invalid time: <code>{time_str}</code>\n\n"
+                f"Please use 24-hour format:\n"
+                f"• Hours: 00-23\n"
+                f"• Minutes: 00-59\n"
+                f"• Format: HH:MM\n\n"
+                f"Try again:",
+                reply_markup=markup,
+                parse_mode='HTML'
+            )
+            return
+    
+    if len(validated_times) > 8:
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        markup.add(types.KeyboardButton('/Cancel_Schedule ❌'))
+        bot.send_message(
+            chat_id,
+            f"⚠️ Maximum 8 custom times allowed.\n"
+            f"You entered {len(validated_times)} times.\n\n"
+            f"Please reduce the number of times:",
+            reply_markup=markup
+        )
+        return
+    
+    seen = set()
+    unique_times = []
+    for time_str in validated_times:
+        if time_str not in seen:
+            seen.add(time_str)
+            unique_times.append(time_str)
+    
+    logger.debug(f"Creating schedule with validated times: {unique_times}")
+    
+    try:
+        create_schedule(chat_id, 'Custom times ⚙️', custom_times=unique_times)
+    except Exception as e:
+        logger.error(f"Failed to create custom schedule: {e}")
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        markup.add(types.KeyboardButton('/Cancel_Schedule ❌'))
+        bot.send_message(
+            chat_id,
+            f"⚠️ Failed to create schedule: {str(e)}\n\n"
+            f"Please try again or contact support.",
+            reply_markup=markup
+        )
+
+
+def create_schedule(chat_id, frequency, custom_times=None):
+    try:
+        selected_device = user_context[chat_id]['schedule_device']
+        device_id = user_context[chat_id]['schedule_device_id']
+        
+        existing_schedules = TelegramSchedule.objects.filter(
+            chat_id=chat_id, 
+            device_name=selected_device, 
+            is_active=True
+        )
+        for existing in existing_schedules:
+            for job_id in existing.job_ids:
+                try:
+                    scheduler.remove_job(job_id)
+                    logger.debug(f"Removed existing job {job_id}")
+                except Exception as e:
+                    logger.warning(f"Error removing existing job {job_id}: {e}")
+            existing.is_active = False
+            existing.save()
+        
+        base_job_id = f"schedule_{chat_id}_{selected_device}_{int(datetime.now().timestamp())}"
+        job_ids = []
+        next_run_time = None
+        time_display = ""
+        
+        now = datetime.now(YEREVAN_TZ)
+        
+        if frequency == 'Every 15 minutes ⏰':
+            earliest_next_run = None
+            for minute in [0, 15, 30, 45]:
+                job_id = f"{base_job_id}_{minute}"
+                job = scheduler.add_job(
+                    send_scheduled_data,
+                    CronTrigger(minute=minute, timezone=YEREVAN_TZ),
+                    args=[chat_id, device_id, selected_device],
+                    id=job_id,
+                    replace_existing=True,
+                    max_instances=1,
+                    coalesce=True
+                )
+                job_ids.append(job_id)
+                logger.debug(f"Scheduled job {job_id} for Every 15 minutes at minute {minute}")
+                
+                current_hour = now.hour
+                if minute > now.minute:
+                    next_scheduled = now.replace(minute=minute, second=0, microsecond=0)
+                else:
+                    next_scheduled = now.replace(minute=minute, second=0, microsecond=0) + timedelta(hours=1)
+                
+                if earliest_next_run is None or next_scheduled < earliest_next_run:
+                    earliest_next_run = next_scheduled
+            
+            time_display = "every 15 minutes (at HH:00, HH:15, HH:30, HH:45)"
+            next_run_time = earliest_next_run
+            freq_code = '15min'
+            
+        elif frequency == 'Every hour 🕐':
+            job_id = base_job_id
+            job = scheduler.add_job(
+                send_scheduled_data,
+                CronTrigger(minute=0, timezone=YEREVAN_TZ),
+                args=[chat_id, device_id, selected_device],
+                id=job_id,
+                replace_existing=True,
+                max_instances=1,
+                coalesce=True
+            )
+            time_display = "every hour (at HH:00)"
+            job_ids.append(job_id)
+            freq_code = '1hour'
+            
+            if now.minute == 0 and now.second < 30:
+                next_run_time = now.replace(minute=0, second=0, microsecond=0)
+            else:
+                next_run_time = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+            
+        elif frequency == 'Custom times ⚙️' and custom_times:
+            earliest_next_run = None
+            
+            for i, time_str in enumerate(custom_times):
+                time_parts = time_str.split(':')
+                hour = int(time_parts[0])
+                minute = int(time_parts[1])
+                
+                job_id = f"{base_job_id}_{i}_{hour:02d}{minute:02d}"
+                
+                job = scheduler.add_job(
+                    send_scheduled_data,
+                    CronTrigger(hour=hour, minute=minute, timezone=YEREVAN_TZ),
+                    args=[chat_id, device_id, selected_device],
+                    id=job_id,
+                    replace_existing=True,
+                    max_instances=1,
+                    coalesce=True
+                )
+                job_ids.append(job_id)
+                logger.info(f"Created custom schedule job {job_id} for {time_str}")
+                
+                today = now.date()
+                scheduled_time = datetime.combine(today, time(hour, minute))
+                scheduled_time = YEREVAN_TZ.localize(scheduled_time)
+                
+                if scheduled_time <= now:
+                    scheduled_time += timedelta(days=1)
+                
+                if earliest_next_run is None or scheduled_time < earliest_next_run:
+                    earliest_next_run = scheduled_time
+            
+            if not job_ids:
+                raise ValueError("No jobs were created for custom times")
+            
+            time_display = f"at {', '.join(custom_times)}"
+            next_run_time = earliest_next_run
+            freq_code = 'custom'
+        
+        schedule_record = create_schedule_record(
+            chat_id=chat_id,
+            device_name=selected_device,
+            device_id=device_id,
+            frequency=freq_code,
+            custom_times=custom_times,
+            job_ids=job_ids
+        )
+        
+        schedule_keys = ['schedule_state', 'schedule_frequency', 'schedule_device',
+                        'schedule_device_id', 'schedule_country', 'custom_times']
+        for key in schedule_keys:
+            user_context[chat_id].pop(key, None)
+        
+        next_run_display = "Soon"
+        if next_run_time:
+            next_run_display = next_run_time.strftime('%Y-%m-%d %H:%M (Yerevan)')
+        
+        markup = get_schedule_menu_markup()
+        bot.send_message(
+            chat_id,
+            f"✅ <b>Schedule Created Successfully!</b>\n\n"
+            f"📍 <b>Device:</b> {selected_device}\n"
+            f"⏰ <b>Frequency:</b> {time_display}\n"
+            f"📅 <b>Next Update:</b> {next_run_display}\n\n"
+            f"You will now receive automatic updates {time_display}.",
+            reply_markup=markup,
+            parse_mode='HTML'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error creating schedule: {e}")
+        traceback.print_exc()
+        bot.send_message(
+            chat_id,
+            f"⚠️ Error creating schedule: {str(e)}",
+            reply_markup=get_schedule_menu_markup()
+        )
+        
+def send_scheduled_data(chat_id, device_id, device_name):
+    try:
+        logger.info(f"Sending scheduled data for device {device_name} to chat {chat_id}")
+        
+        time_module.sleep(2)
+        
+        max_retries = 3
+        measurement = None
+        
+        for attempt in range(max_retries):
+            measurement = fetch_latest_measurement(device_id)
+            if measurement:
+                try:
+                    timestamp_str = measurement.get('timestamp', '')
+                    if timestamp_str and timestamp_str != "N/A":
+                        data_time = datetime.strptime(timestamp_str, "%Y-%m-%d %H:%M:%S")
+                        data_time = data_time.replace(tzinfo=pytz.UTC).astimezone(YEREVAN_TZ)
+                        current_time = datetime.now(YEREVAN_TZ)
+                        
+                        time_diff = current_time - data_time
+                        if time_diff.total_seconds() <= 1200: 
+                            break 
+                        else:
+                            logger.warning(f"Data is {time_diff.total_seconds()/60:.1f} minutes old, retrying...")
+                except Exception as e:
+                    logger.warning(f"Could not parse timestamp for freshness check: {e}")
+                    break
+            
+            if attempt < max_retries - 1: 
+                time_module.sleep(5)
+        
+        if measurement:
+            current_time = datetime.now(YEREVAN_TZ).strftime('%Y-%m-%d %H:%M')
+            formatted_data = get_formatted_data(measurement=measurement, selected_device=device_name)
+            
+            data_timestamp = measurement.get('timestamp', 'Unknown')
+            freshness_note = ""
+            try:
+                if data_timestamp != 'Unknown' and data_timestamp != 'N/A':
+                    data_time = datetime.strptime(data_timestamp, "%Y-%m-%d %H:%M:%S")
+                    data_time = data_time.replace(tzinfo=pytz.UTC).astimezone(YEREVAN_TZ)
+                    current_time_obj = datetime.now(YEREVAN_TZ)
+                    
+                    time_diff = current_time_obj - data_time
+                    minutes_old = time_diff.total_seconds() / 60
+                    
+            except:
+                pass
+            
+            bot.send_message(
+                chat_id,
+                f"🔔 <b>Scheduled Update</b>\n"
+                f"🕐 <b>Update Time:</b> {current_time}\n",
+                parse_mode='HTML'
+            )
+        else:
+            bot.send_message(
+                chat_id,
+                f"⚠️ Scheduled update failed for {device_name}. Data unavailable at this time."
+            )
+    except Exception as e:
+        logger.error(f"Error sending scheduled data: {e}")
+        traceback.print_exc()
+        try:
+            bot.send_message(
+                chat_id,
+                f"⚠️ Error sending scheduled update for {device_name}. Please try manually."
+            )
+        except:
+            pass  
+
+@bot.message_handler(commands=['My_Schedules'])
+@log_command_decorator
+def my_schedules(message):
+    chat_id = message.chat.id
+    
+    schedules = get_user_schedules(chat_id)
+    
+    if not schedules.exists():
+        markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+        markup.add(
+            types.KeyboardButton('/Add_Schedule ➕'),
+            types.KeyboardButton('/Back_to_Menu 🔙')
+        )
+        bot.send_message(
+            chat_id,
+            "📋 <b>My Schedules</b>\n\n"
+            "You don't have any scheduled data yet.\n"
+            "Use 'Add Schedule' to create your first schedule.",
+            reply_markup=markup,
+            parse_mode='HTML'
+        )
+        return
+    
+    schedules_text = "📋 <b>My Schedules</b>\n\n"
+    for i, schedule in enumerate(schedules, 1):
+        if schedule.frequency == '15min':
+            time_display = "Every 15 minutes (at HH:00, HH:15, HH:30, HH:45)"
+        elif schedule.frequency == '1hour':
+            time_display = "Every hour (at HH:00)"
+        elif schedule.frequency == 'custom':
+            time_display = f"at {', '.join(schedule.custom_times)} "
+        else:
+            time_display = "Unknown frequency"
+        
+        next_run_display = get_next_run_time_from_jobs(schedule.job_ids)
+        
+        schedules_text += (
+            f" <b>📍{schedule.device_name}</b>\n"
+            f" ⏳ {time_display}\n"
+            f" 👉🏼 Next Update: {next_run_display}\n\n"
+        )
+    
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    markup.add(
+        types.KeyboardButton('/Add_Schedule ➕'),
+        types.KeyboardButton('/Delete_Schedule 🗑️'),
+        types.KeyboardButton('/Delete_All_Schedules ❌'),
+        types.KeyboardButton('/Back_to_Menu 🔙')
+    )
+    
+    bot.send_message(
+        chat_id,
+        schedules_text,
+        reply_markup=markup,
+        parse_mode='HTML'
+    )
+
+def get_next_run_time_from_jobs(job_ids):
+    try:
+        earliest_next_run = None
+        
+        for job_id in job_ids:
+            try:
+                job = scheduler.get_job(job_id)
+                if job and hasattr(job, 'next_run_time') and job.next_run_time:
+                    next_run_yerevan = job.next_run_time.astimezone(YEREVAN_TZ)
+                    if earliest_next_run is None or next_run_yerevan < earliest_next_run:
+                        earliest_next_run = next_run_yerevan
+            except Exception as e:
+                logger.warning(f"Could not get job {job_id}: {e}")
+                continue
+        
+        if earliest_next_run:
+            return earliest_next_run.strftime('%Y-%m-%d %H:%M (Yerevan)')
+        else:
+            return "Scheduled"
+            
+    except Exception as e:
+        logger.error(f"Error getting next run time: {e}")
+        return "Unknown"
+@bot.message_handler(commands=['Delete_Schedule'])
+@log_command_decorator
+def delete_schedule_menu(message):
+    chat_id = message.chat.id
+    
+    schedules = get_user_schedules(chat_id)
+    
+    if not schedules.exists():
+        bot.send_message(
+            chat_id,
+            "📋 No schedules to delete.",
+            reply_markup=get_schedule_menu_markup()
+        )
+        return
+    
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    for i, schedule in enumerate(schedules, 1):
+        markup.add(types.KeyboardButton(f"Delete {i}: {schedule.device_name} 🗑️"))
+    markup.add(types.KeyboardButton('/Cancel_Delete ❌'))
+    
+    user_context[chat_id]['delete_state'] = 'awaiting_selection'
+    
+    bot.send_message(
+        chat_id,
+        "🗑️ <b>Delete Schedule</b>\n\n"
+        "Select which schedule to delete:",
+        reply_markup=markup,
+        parse_mode='HTML'
+    )
+
+@bot.message_handler(func=lambda message: message.text.startswith('Delete ') and message.text.endswith(' 🗑️'))
+@log_command_decorator
+def handle_delete_selection(message):
+    chat_id = message.chat.id
+    
+    if (chat_id not in user_context or 
+        user_context[chat_id].get('delete_state') != 'awaiting_selection'):
+        return
+    
+    try:
+        schedule_num = int(message.text.split(':')[0].replace('Delete ', '')) - 1
+        schedules = list(get_user_schedules(chat_id))
+        
+        if 0 <= schedule_num < len(schedules):
+            schedule = schedules[schedule_num]
+            
+            removed_jobs = []
+            failed_jobs = []
+            
+            for job_id in schedule.job_ids:
+                try:
+                    scheduler.remove_job(job_id)
+                    removed_jobs.append(job_id)
+                    logger.info(f"Successfully removed job: {job_id}")
+                except Exception as e:
+                    failed_jobs.append(job_id)
+                    logger.warning(f"Failed to remove job {job_id}: {e}")
+            
+            schedule.is_active = False
+            schedule.save()
+            
+            user_context[chat_id].pop('delete_state', None)
+            
+            status_msg = f"✅ Schedule deleted successfully!\n\n" \
+                        f"📍 Device: {schedule.device_name}\n"
+            
+            if failed_jobs:
+                status_msg += f"\n⚠️ {len(failed_jobs)} job(s) were already inactive"
+            
+            bot.send_message(
+                chat_id,
+                status_msg,
+                reply_markup=get_schedule_menu_markup()
+            )
+        else:
+            bot.send_message(chat_id, "⚠️ Invalid selection.")
+    except (ValueError, IndexError) as e:
+        logger.error(f"Error in delete selection: {e}")
+        bot.send_message(chat_id, "⚠️ Invalid selection.")
+
+@bot.message_handler(commands=['Delete_All_Schedules'])
+@log_command_decorator
+def delete_all_schedules(message):
+    chat_id = message.chat.id
+    
+    schedules = get_user_schedules(chat_id)
+    count = schedules.count()
+    
+    if count == 0:
+        bot.send_message(
+            chat_id,
+            "📋 No schedules to delete.",
+            reply_markup=get_schedule_menu_markup()
+        )
+        return
+    
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    markup.add(
+        types.KeyboardButton('/Confirm_Delete_All ✅'),
+        types.KeyboardButton('/Cancel_Delete ❌')
+    )
+    
+    bot.send_message(
+        chat_id,
+        f"⚠️ <b>Delete All Schedules</b>\n\n"
+        f"Are you sure you want to delete all {count} schedules?\n"
+        f"‼️ This action cannot be undone.",
+        reply_markup=markup,
+        parse_mode='HTML'
+    )
+
+@bot.message_handler(commands=['Confirm_Delete_All'])
+@log_command_decorator
+def confirm_delete_all(message):
+    chat_id = message.chat.id
+    
+    schedules = get_user_schedules(chat_id)
+    count = schedules.count()
+    total_jobs_removed = 0
+    
+    for schedule in schedules:
+        for job_id in schedule.job_ids:
+            try:
+                scheduler.remove_job(job_id)
+                total_jobs_removed += 1
+                logger.info(f"Successfully removed job: {job_id}")
+            except Exception as e:
+                logger.warning(f"Job removal warning for {job_id}: {e}")
+        
+        schedule.is_active = False
+        schedule.save()
+
+    bot.send_message(
+        chat_id,
+        f"✅ All {count} schedules deleted successfully!\n",
+        reply_markup=get_schedule_menu_markup()
+    )
+
+def restore_schedules_on_startup():
+    try:
+        existing_jobs = scheduler.get_jobs()
+        for job in existing_jobs:
+            try:
+                scheduler.remove_job(job.id)
+                logger.debug(f"Cleared existing job: {job.id}")
+            except Exception as e:
+                logger.warning(f"Could not clear job {job.id}: {e}")
+        
+        active_schedules = TelegramSchedule.objects.filter(is_active=True)
+        restored_count = 0
+        
+        for schedule in active_schedules:
+            try:
+                base_job_id = f"schedule_{schedule.chat_id}_{schedule.device_name}_{int(datetime.now().timestamp())}"
+                job_ids = []
+                
+                if schedule.frequency == '15min':
+                    for minute in [0, 15, 30, 45]:
+                        job_id = f"{base_job_id}_{minute}"
+                        scheduler.add_job(
+                            send_scheduled_data,
+                            CronTrigger(minute=minute, timezone=YEREVAN_TZ),
+                            args=[schedule.chat_id, schedule.device_id, schedule.device_name],
+                            id=job_id,
+                            replace_existing=True,
+                            max_instances=1, 
+                            coalesce=True
+                        )
+                        job_ids.append(job_id)
+                
+                elif schedule.frequency == '1hour':
+                    job_id = base_job_id
+                    scheduler.add_job(
+                        send_scheduled_data,
+                        CronTrigger(minute=0, timezone=YEREVAN_TZ),
+                        args=[schedule.chat_id, schedule.device_id, schedule.device_name],
+                        id=job_id,
+                        replace_existing=True,
+                        max_instances=1,
+                        coalesce=True
+                    )
+                    job_ids = [job_id]
+                
+                elif schedule.frequency == 'custom' and schedule.custom_times:
+                    for i, time_str in enumerate(schedule.custom_times):
+                        hour, minute = map(int, time_str.split(':'))
+                        job_id = f"{base_job_id}_{i}_{hour:02d}{minute:02d}"
+                        scheduler.add_job(
+                            send_scheduled_data,
+                            CronTrigger(hour=hour, minute=minute, timezone=YEREVAN_TZ),
+                            args=[schedule.chat_id, schedule.device_id, schedule.device_name],
+                            id=job_id,
+                            replace_existing=True,
+                            max_instances=1,
+                            coalesce=True
+                        )
+                        job_ids.append(job_id)
+                
+                schedule.job_ids = job_ids
+                schedule.save()
+                restored_count += 1
+                logger.info(f"Restored schedule for {schedule.device_name} (Chat: {schedule.chat_id}) with {len(job_ids)} jobs")
+                
+            except Exception as e:
+                logger.error(f"Failed to restore schedule {schedule.id}: {e}")
+                continue
+        
+        logger.info(f"Successfully restored {restored_count} schedules")
+        
+    except Exception as e:
+        logger.error(f"Error during schedule restoration: {e}")
+
+
+restore_schedules_on_startup()
+
+@bot.message_handler(commands=['Cancel_Schedule'])
+@log_command_decorator
+def cancel_schedule_action(message):
+    chat_id = message.chat.id
+    logger.debug(f"Cancel schedule triggered for chat_id: {chat_id}")
+    
+    schedule_keys = ['schedule_state', 'schedule_frequency', 'schedule_device', 
+                    'schedule_device_id', 'schedule_country', 'custom_times']
+    for key in schedule_keys:
+        user_context[chat_id].pop(key, None)
+    
+    markup = get_schedule_menu_markup()
+    bot.send_message(
+        chat_id,
+        "❌ Schedule creation cancelled. Back to schedule menu.",
+        reply_markup=markup
+    )
+
+
+@bot.message_handler(commands=['Cancel_Delete'])
+@log_command_decorator
+def cancel_delete_action(message):
+    chat_id = message.chat.id
+    logger.debug(f"Cancel delete triggered for chat_id: {chat_id}")
+    
+    user_context[chat_id].pop('delete_state', None)
+    
+    markup = get_schedule_menu_markup()
+    bot.send_message(
+        chat_id,
+        "❌ Delete action cancelled. Back to schedule menu.",
+        reply_markup=markup
+    )
+@bot.message_handler(commands=['Back_to_Menu'])
+@log_command_decorator
+def back_to_main_menu(message):
+    chat_id = message.chat.id
+    logger.debug("Back to menu schedule")
+    user_context[chat_id].pop('schedule_state', None)
+    user_context[chat_id].pop('schedule_frequency', None)
+    user_context[chat_id].pop('schedule_device', None)
+    user_context[chat_id].pop('schedule_device_id', None)
+    user_context[chat_id].pop('schedule_country', None)
+    user_context[chat_id].pop('custom_times', None)
+    user_context[chat_id].pop('delete_state', None)
+    selected_device = user_context[chat_id].get('selected_device', '')
+    markup = get_command_menu(cur=selected_device)
+    bot.send_message(
+        chat_id,
+        "🔙 Back to main menu. How can I assist you?",
+        reply_markup=markup
+    )
+
+def get_schedule_menu_markup():
+    markup = types.ReplyKeyboardMarkup(row_width=1, resize_keyboard=True)
+    markup.add(
+        types.KeyboardButton('/Add_Schedule ➕'),
+        types.KeyboardButton('/My_Schedules 📋'),
+        types.KeyboardButton('/Schedule_Help ❓'),
+        types.KeyboardButton('/Back_to_Menu 🔙')
+    )
+    return markup
+
 
 
 @bot.message_handler(content_types=['audio', 'document', 'photo', 'sticker', 'video', 'video_note', 'voice', 'contact', 'venue', 'animation'])
@@ -959,6 +2025,3 @@ if __name__ == "__main__":
 def run_bot_view(request):
     start_bot_thread()
     return JsonResponse({'status': 'Bot is running in the background!'})
-
-
-
