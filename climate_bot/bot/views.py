@@ -1129,7 +1129,7 @@ def handle_schedule_device_selection_logic(chat_id, selected_device, device_id):
             chat_id,
             "⚠️ <b>No Recent Data Found</b>\n\n"
             "This device hasn't reported any measurements recently. Please check back later.\n\n"
-            "Schedule cannot be created for this device at the moment.",
+            "❗Schedule cannot be created for this device at the moment.",
             reply_markup=markup,
             parse_mode='HTML'
         )
@@ -1477,7 +1477,7 @@ def create_schedule(chat_id, frequency, custom_times=None):
         
         next_run_display = "Soon"
         if next_run_time:
-            next_run_display = next_run_time.strftime('%Y-%m-%d %H:%M (Yerevan)')
+            next_run_display = next_run_time.strftime('%Y-%m-%d %H:%M')
         
         markup = get_schedule_menu_markup()
         bot.send_message(
@@ -1535,26 +1535,18 @@ def send_scheduled_data(chat_id, device_id, device_name):
             current_time = datetime.now(YEREVAN_TZ).strftime('%Y-%m-%d %H:%M')
             formatted_data = get_formatted_data(measurement=measurement, selected_device=device_name)
             
-            data_timestamp = measurement.get('timestamp', 'Unknown')
-            freshness_note = ""
-            try:
-                if data_timestamp != 'Unknown' and data_timestamp != 'N/A':
-                    data_time = datetime.strptime(data_timestamp, "%Y-%m-%d %H:%M:%S")
-                    data_time = data_time.replace(tzinfo=pytz.UTC).astimezone(YEREVAN_TZ)
-                    current_time_obj = datetime.now(YEREVAN_TZ)
-                    
-                    time_diff = current_time_obj - data_time
-                    minutes_old = time_diff.total_seconds() / 60
-                    
-            except:
-                pass
+            complete_message = (
+                f"🔔 <b>Scheduled Update</b>\n"
+                f"🕐 <b>Update Time:</b> {current_time}\n\n"
+                f"{formatted_data}"
+            )
             
             bot.send_message(
                 chat_id,
-                f"🔔 <b>Scheduled Update</b>\n"
-                f"🕐 <b>Update Time:</b> {current_time}\n",
+                complete_message,
                 parse_mode='HTML'
             )
+            
         else:
             bot.send_message(
                 chat_id,
@@ -1569,7 +1561,7 @@ def send_scheduled_data(chat_id, device_id, device_name):
                 f"⚠️ Error sending scheduled update for {device_name}. Please try manually."
             )
         except:
-            pass  
+            pass
 
 @bot.message_handler(commands=['My_Schedules'])
 @log_command_decorator
@@ -1644,7 +1636,7 @@ def get_next_run_time_from_jobs(job_ids):
                 continue
         
         if earliest_next_run:
-            return earliest_next_run.strftime('%Y-%m-%d %H:%M (Yerevan)')
+            return earliest_next_run.strftime('%Y-%m-%d %H:%M')
         else:
             return "Scheduled"
             
