@@ -148,6 +148,10 @@ STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 MEDIA_URL = '/bot/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
+STATICFILES_DIRS = [
+    os.path.join(BASE_DIR, 'static_local'),
+]
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
@@ -219,8 +223,9 @@ from django.urls import reverse_lazy
 from django.utils.translation import gettext_lazy as _
 
 UNFOLD = {
-    "SITE_TITLE": "Custom suffix in <title> tag",
-    "SITE_HEADER": "Appears in sidebar at the top",
+    "SITE_TITLE": ADMIN_SITE_TITLE,
+    "SITE_HEADER": ADMIN_SITE_HEADER,
+    "SITE_SUBHEADER": "ClimateNet BOT Administration",
     "SITE_URL": "bot/",
     # "SITE_ICON": lambda request: static("icon.svg"),  # both modes, optimise for 32px height
     "SITE_ICON": {
@@ -232,13 +237,23 @@ UNFOLD = {
         "light": lambda request: static("logo-light.svg"),  # light mode
         "dark": lambda request: static("logo-dark.svg"),  # dark mode
     },
-    "SITE_SYMBOL": "speed",  # symbol from icon set
+    "SITE_SYMBOL": "device_thermostat",  # symbol from icon set
     "SITE_FAVICONS": [
+        {
+            "rel": "icon",
+            "type": "image/x-icon",
+            "href": lambda request: static("favicon/favicon.ico"),
+        },
         {
             "rel": "icon",
             "sizes": "32x32",
             "type": "image/svg+xml",
-            "href": lambda request: static("favicon.svg"),
+            "href": lambda request: static("favicon/favicon.svg"),
+        },
+        {
+            "rel": "apple-touch-icon",
+            "sizes": "180x180",
+            "href": lambda request: static("favicon/apple-touch-icon.png"),
         },
     ],
     "SHOW_HISTORY": True, # show/hide "History" button, default: True
